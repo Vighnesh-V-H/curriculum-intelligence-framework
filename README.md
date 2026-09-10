@@ -1,1 +1,443 @@
-# CurriculumDesignFramework
+# AI-Powered Curriculum Intelligence & Verification Framework
+
+An AI-powered framework for holistic analysis, verification, and quality assessment of academic curricula against Outcome-Based Education (OBE) principles, prerequisite dependencies, curriculum structure, accreditation expectations, and industry relevance.
+
+## Contents
+
+- [Project Overview](#project-overview)
+- [Problem Statement](#problem-statement)
+- [Objectives](#objectives)
+- [Proposed Solution](#proposed-solution)
+- [Core Capabilities](#core-capabilities)
+- [System Architecture](#system-architecture)
+- [Verification Engine](#verification-engine)
+- [Verification Report](#verification-report)
+- [Explainability and Human Review](#explainability-and-human-review)
+- [Technology Stack](#technology-stack)
+- [Functional Requirements](#functional-requirements)
+- [Non-Functional Requirements](#non-functional-requirements)
+- [Scope](#scope)
+- [Evaluation](#evaluation)
+- [Repository Structure](#repository-structure)
+- [Development Roadmap](#development-roadmap)
+- [Project Status](#project-status)
+- [Team and License](#team-and-license)
+
+## Project Overview
+
+Educational institutions continuously revise curricula to meet academic requirements, accreditation standards, evolving industry expectations, and OBE frameworks. Curriculum validation is often performed manually by committees reviewing courses, topics, Course Outcomes (COs), Program Outcomes (POs), Program Educational Objectives (PEOs), prerequisite relationships, credit distributions, and semester-wise sequencing.
+
+This project proposes a framework that analyzes an entire degree-program curriculum as an interconnected system rather than evaluating courses independently. It represents curriculum information using a knowledge graph containing courses, topics, outcomes, semesters, prerequisites, corequisites, and outcome mappings. An NLP/LLM-based analysis engine extracts and interprets information from syllabus documents and compares it with declared curriculum structures.
+
+The system identifies potential gaps, inconsistencies, redundancies, sequencing issues, and outcome-coverage problems and generates an interpretable Curriculum Verification Report.
+
+## Problem Statement
+
+Manual curriculum analysis makes it difficult to consistently identify:
+
+- Missing or weak Program Outcome coverage
+- Incorrect or inconsistent CO-PO mappings
+- Courses appearing before their required prerequisites
+- Missing foundational knowledge in prerequisite chains
+- Excessive topic duplication or insufficient content progression
+- Imbalanced credit distribution and semester-level outcome gaps
+- Outdated or insufficiently represented industry competencies
+- Potential misalignment with accreditation and OBE expectations
+
+As curricula evolve, these interconnected issues become increasingly difficult to detect before curriculum review, accreditation, or implementation.
+
+## Objectives
+
+The proposed system aims to:
+
+1. Ingest structured curriculum information and syllabus documents.
+2. Extract courses, topics, outcomes, prerequisites, skills, and related entities.
+3. Represent the curriculum and its relationships using a knowledge graph.
+4. Analyze CO-PO mappings and program-level PO coverage.
+5. Verify prerequisite chains and semester-wise course sequencing.
+6. Detect topic overlap while distinguishing redundancy from legitimate progression.
+7. Analyze credits, course distribution, dependencies, and curriculum structure.
+8. Compare curriculum evidence with configured OBE, accreditation, and industry references.
+9. Generate evidence-based findings, confidence scores, and recommendations.
+10. Provide an interactive visual representation of the curriculum.
+11. Support repeatable verification whenever curriculum data is updated.
+
+## Proposed Solution
+
+The framework combines deterministic rules, graph analysis, NLP, semantic similarity, and LLM-assisted reasoning. The LLM is used as an interpretation and explanation layer, not as the sole source of verification.
+
+```text
+Curriculum Documents
+        |
+        v
+Document Ingestion and Validation
+        |
+        v
+NLP / LLM Information Extraction
+        |
+        v
+Structured Curriculum Representation
+        |
+        v
+Curriculum Knowledge Graph
+        |
+        +------------------+------------------+
+        |                  |                  |
+        v                  v                  v
+Outcome Analysis   Prerequisite Analysis   Structure Analysis
+        |                  |                  |
+        +------------------+------------------+
+                           v
+                  Verification Engine
+                           |
+                           v
+          Findings, Recommendations, and Visual Map
+```
+
+### Example Extracted Course
+
+```json
+{
+  "course_code": "CS301",
+  "course_name": "Database Management Systems",
+  "topics": [
+    "Database Fundamentals",
+    "ER Model",
+    "Relational Model",
+    "SQL",
+    "Joins",
+    "Nested Queries"
+  ],
+  "course_outcomes": [
+    "Explain fundamental database concepts",
+    "Design relational databases",
+    "Develop SQL queries"
+  ]
+}
+```
+
+### Knowledge Graph Model
+
+Major entities include Program, Course, Semester, Topic, Course Outcome, Program Outcome, Program Educational Objective, Skill, Accreditation Requirement, and Industry Competency.
+
+```text
+Course --------BELONGS_TO-------> Semester
+Course --------COVERS-----------> Topic
+Course --------HAS_OUTCOME------> Course Outcome
+Course Outcome -CONTRIBUTES_TO--> Program Outcome
+Course --------PREREQUISITE_OF-> Course
+Course --------DEVELOPS---------> Skill
+Program Outcome -SUPPORTS-------> Program Educational Objective
+```
+
+## Core Capabilities
+
+### Document Ingestion and Extraction
+
+The system will process curriculum structures, course syllabi, course descriptions, COs, POs, PEOs, CO-PO matrices, credit structures, semester plans, and prerequisite information. It will extract topics, modules, learning objectives, technologies, skills, competencies, and assessment-related information where available.
+
+### CO-PO and PO Coverage Analysis
+
+The framework compares declared CO-PO mappings with course content, Course Outcomes, topic-level evidence, and program-level coverage. It can identify weak mappings, insufficient evidence, concentrated outcome coverage, missing early exposure, and potential PO gaps.
+
+### Prerequisite and Sequence Verification
+
+Course dependencies are modeled as a directed graph. The system can identify invalid course references, missing prerequisite links, broken dependency chains, circular dependencies, and cases where a foundational course appears after a dependent course.
+
+```text
+Programming Fundamentals -> Data Structures -> Algorithms -> Machine Learning
+```
+
+These results are presented as potential issues requiring academic review, not as automatic academic judgments.
+
+### Topic Overlap and Progression Analysis
+
+Semantic similarity is used to compare topics and course content. The analysis considers topic similarity, depth, context, learning objectives, course level, outcome contribution, and semester position. Findings may be categorized as low overlap, moderate overlap, high overlap, potential redundancy, or progressive reinforcement.
+
+### Curriculum Structure Analysis
+
+The system can analyze semester-wise credits, core and elective distribution, foundational and advanced courses, prerequisite depth, topic coverage, outcome distribution, skill distribution, elective concentration, and course dependencies.
+
+### Accreditation and Industry Alignment
+
+Configured reference knowledge bases can support preliminary comparisons against OBE expectations, accreditation guidance, continuous-improvement evidence, and industry competencies such as cloud computing, artificial intelligence, data engineering, cybersecurity, DevOps, and distributed systems. These comparisons are advisory and do not claim official accreditation compliance.
+
+## System Architecture
+
+```text
+                     Faculty / Curriculum Committee
+                                  |
+                                  v
+                         React Curriculum UI
+                                  |
+                             REST / HTTP
+                                  |
+                                  v
+                              FastAPI API
+                                  |
+             +--------------------+--------------------+
+             |                    |                    |
+             v                    v                    v
+      Document Processing   Verification Engine   Reference Data
+             |                    |
+             v                    v
+       NLP / LLM Layer     Rules and Graph Analysis
+             |                    |
+             +--------------------+
+                                  v
+                         Neo4j Curriculum Graph
+                                  |
+                                  v
+                    Curriculum Verification Report
+```
+
+## Verification Engine
+
+The engine combines four analysis approaches:
+
+### Rule-Based Analysis
+
+- Invalid semester or course references
+- Duplicate course identifiers
+- Credit inconsistencies
+- Missing mappings
+- Invalid prerequisite references
+- Cyclic prerequisite dependencies
+
+### Graph-Based Analysis
+
+- Prerequisite chains and course dependencies
+- PO coverage and outcome propagation
+- Topic relationships
+- Curriculum structure and progression
+
+### NLP and Semantic Analysis
+
+- Topic extraction
+- Course-content comparison
+- Outcome-content alignment
+- Skill extraction
+- Topic similarity and overlap detection
+
+### LLM-Assisted Reasoning
+
+- Semantic interpretation
+- Evidence-based explanations
+- Curriculum-level reasoning
+- Human-readable recommendations
+
+## Verification Report
+
+The report will organize findings by category and include:
+
+- Issue and category
+- Severity and confidence score
+- Related courses, outcomes, or topics
+- Evidence and explanation
+- Recommendation
+- Human-review requirement
+
+Example categories include structural issues, outcome issues, dependency issues, content issues, industry alignment issues, and accreditation/OBE review areas.
+
+## Explainability and Human Review
+
+The framework is a decision-support system. It will not automatically approve or reject a curriculum, replace curriculum committees, claim official accreditation certification, or modify academic content without approval.
+
+Each potential issue should explain why it was detected. For example:
+
+```text
+Potential Prerequisite Issue
+
+Course: Machine Learning
+Observed Structure: Machine Learning appears before Algorithms.
+Evidence: Identified topics and outcomes indicate dependency on algorithmic concepts.
+Confidence: 0.82
+Recommendation: Review the prerequisite relationship and course sequencing.
+```
+
+The intended workflow is:
+
+```text
+AI Analysis -> Potential Finding -> Evidence and Explanation
+            -> Faculty / Committee Review -> Accept, Reject, or Modify
+```
+
+## Technology Stack
+
+### Backend
+
+- Python
+- FastAPI
+- Pydantic
+- Uvicorn
+
+### AI and NLP
+
+- Transformer-based models
+- Embedding and semantic similarity models
+- Large Language Models
+- Python NLP ecosystem
+
+### Knowledge Graph and Storage
+
+- Neo4j
+- Cypher Query Language
+- Additional storage for application metadata where required
+
+### Frontend and Documents
+
+- React.js
+- JavaScript / TypeScript
+- Tailwind CSS
+- Graph visualization library
+- PDF parsers, OCR, and document loaders as required
+
+### Development
+
+- Git and GitHub
+- Postman
+- VS Code
+- Docker
+
+## Functional Requirements
+
+- **FR1 - Curriculum Ingestion:** Accept authorized curriculum documents and structured data.
+- **FR2 - Information Extraction:** Extract courses, topics, outcomes, prerequisites, skills, and related entities.
+- **FR3 - Knowledge Graph Construction:** Build and maintain the curriculum graph.
+- **FR4 - Outcome Mapping Analysis:** Analyze CO-PO and PO-level coverage.
+- **FR5 - Prerequisite Verification:** Identify prerequisite and sequencing inconsistencies.
+- **FR6 - Topic Similarity Analysis:** Identify potentially duplicated or overlapping content.
+- **FR7 - Structure Analysis:** Analyze credits, semesters, dependencies, and progression.
+- **FR8 - Accreditation Analysis:** Compare evidence with configured OBE and accreditation criteria.
+- **FR9 - Industry Analysis:** Compare competencies with a maintained industry reference dataset.
+- **FR10 - Verification Report:** Generate findings, evidence, severity, and recommendations.
+- **FR11 - Visualization:** Provide an interactive graph-based curriculum view.
+- **FR12 - Curriculum Revision:** Reprocess updated curriculum data through the pipeline.
+
+## Non-Functional Requirements
+
+- **Accuracy:** Clearly identify uncertain findings and evaluate extraction quality.
+- **Explainability:** Provide evidence and reasoning for detected issues.
+- **Scalability:** Support complete programs containing multiple semesters and hundreds of entities.
+- **Maintainability:** Keep ingestion, extraction, graph, and verification modules independent where practical.
+- **Extensibility:** Support additional standards, domains, programs, and industry datasets.
+- **Security:** Handle curriculum documents and institutional information securely.
+- **Performance:** Optimize frequently used verification operations and graph queries.
+
+## Scope
+
+The initial implementation focuses on a complete academic degree program and its curriculum structure. It primarily analyzes courses, semesters, credits, topics, COs, POs, PEOs, prerequisites, CO-PO mappings, curriculum dependencies, and topic relationships.
+
+### Out of Scope
+
+- Automatic curriculum approval or rejection
+- Replacement of academic experts or curriculum committees
+- Official accreditation certification
+- Final academic decisions without human review
+- Automatic curriculum modification
+- Treating LLM suggestions as authoritative academic decisions
+
+## Evaluation
+
+The project will be evaluated using technical and domain-specific metrics:
+
+- Information extraction precision, recall, and F1-score
+- Semantic similarity accuracy and false-positive analysis
+- CO-PO consistency and PO coverage accuracy
+- Prerequisite detection accuracy and graph consistency
+- Expert agreement and faculty validation
+- API response time, document processing time, and graph query performance
+- Usability and report interpretability
+
+## Repository Structure
+
+```text
+curriculum-intelligence-framework/
+|
+|-- backend/
+|   |-- app/
+|   |   |-- api/
+|   |   |-- core/
+|   |   |-- models/
+|   |   |-- schemas/
+|   |   |-- services/
+|   |   |-- graph/
+|   |   |-- nlp/
+|   |   |-- verification/
+|   |   `-- main.py
+|   |-- tests/
+|   |-- requirements.txt
+|   `-- README.md
+|
+|-- frontend/
+|   |-- src/
+|   |   |-- components/
+|   |   |-- pages/
+|   |   |-- services/
+|   |   |-- hooks/
+|   |   `-- utils/
+|   |-- public/
+|   |-- package.json
+|   `-- README.md
+|
+|-- data/
+|   |-- curriculum/
+|   |-- reference/
+|   `-- sample/
+|
+|-- docs/
+|-- notebooks/
+|-- scripts/
+|-- .gitignore
+|-- LICENSE
+`-- README.md
+```
+
+## Development Roadmap
+
+1. Requirement analysis and definition of curriculum entities.
+2. Curriculum schema and Neo4j graph model.
+3. Document ingestion, preprocessing, extraction, and validation.
+4. Knowledge graph construction and graph queries.
+5. Structural, prerequisite, CO-PO, PO coverage, and topic-overlap verification.
+6. Semantic similarity and LLM-assisted evidence generation.
+7. Accreditation and industry reference analysis.
+8. React dashboard, graph visualization, and course details.
+9. Unit, integration, NLP, graph, end-to-end, and expert validation testing.
+10. Containerization, deployment, and documentation.
+
+## Project Status
+
+**Current Status:** Initial Development
+
+### Completed
+
+- [x] Project problem identification
+- [x] Project scope definition
+- [x] Initial system objectives
+- [x] Initial architecture planning
+
+### In Progress
+
+- [ ] Detailed requirements analysis
+- [ ] Curriculum data model
+- [ ] Neo4j graph schema
+- [ ] Document ingestion pipeline
+- [ ] NLP/LLM extraction pipeline
+
+### Planned
+
+- [ ] Knowledge graph implementation
+- [ ] Verification engine
+- [ ] CO-PO and prerequisite analysis
+- [ ] Topic overlap analysis
+- [ ] Accreditation and industry relevance analysis
+- [ ] Curriculum visualization
+- [ ] Gap report generation
+- [ ] System evaluation and deployment
+
+## Team and License
+
+This is a final-year major project developed as part of the B.Tech Computer Science and Engineering program.
+
+The project is developed for academic and research purposes. Licensing terms will be finalized as the project progresses.
