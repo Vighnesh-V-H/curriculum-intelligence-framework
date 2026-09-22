@@ -416,11 +416,11 @@ curriculum-intelligence-framework/
 - [x] Project scope definition
 - [x] Initial system objectives
 - [x] Initial architecture planning
+- [x] Curriculum relational data model and PostgreSQL schema (`docs/lld/database-schema.md`)
 
 ### In Progress
 
 - [ ] Detailed requirements analysis
-- [ ] Curriculum data model
 - [ ] Neo4j graph schema
 - [ ] Document ingestion pipeline
 - [ ] NLP/LLM extraction pipeline
