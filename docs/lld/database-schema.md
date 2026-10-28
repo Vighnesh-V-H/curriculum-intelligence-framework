@@ -17,7 +17,7 @@ never modified manually.
 | Item | Decision |
 | --- | --- |
 | Database | PostgreSQL 16+ |
-| Migration tool | Flyway (`backend/src/main/resources/db/migration/`) |
+| Migration tool | Alembic (`backend/alembic/`) |
 | Primary keys | `UUID` generated with `gen_random_uuid()` |
 | Timestamps | `TIMESTAMPTZ` (UTC), default `now()` |
 | Status values | `VARCHAR` with `CHECK` constraints (evolvable via migration) |
@@ -97,6 +97,11 @@ Many-to-many assignment of roles to users.
 | `role_id` | UUID FK → `roles` | PK part |
 | `assigned_by` | UUID FK → `users` | nullable |
 | `assigned_at` | TIMESTAMPTZ | not null |
+
+These tables back the FastAPI authentication module. Access tokens are
+stateless JWTs issued by `POST /api/v1/auth/login`; authorization checks
+resolve role codes through `user_roles` (see
+`docs/lld/authentication.md`).
 
 ### 4.2 Academic Structure (FR-02)
 
@@ -642,16 +647,14 @@ requirements:
 
 | Migration | Contents |
 | --- | --- |
-| `V1__initial_schema.sql` | Tables, constraints, indexes, triggers |
-| `V2__seed_reference_data.sql` | Roles, course types, mapping levels |
+| `alembic/versions/0001_initial_schema.py` | Executes `alembic/sql/001_initial_schema.sql`: tables, constraints, indexes, triggers |
+| `alembic/versions/0002_seed_reference_data.py` | Executes `alembic/sql/002_seed_reference_data.sql`: roles, course types, mapping levels |
 
-Apply with Flyway (Spring Boot starts migrations automatically) or
-manually:
+Apply from the `backend/` directory:
 
 ```text
-psql -h <host> -U <user> -d <database> -f V1__initial_schema.sql
-psql -h <host> -U <user> -d <database> -f V2__seed_reference_data.sql
+uv run alembic upgrade head
 ```
 
 Migrations are ordered and immutable once applied; schema changes are
-introduced as new `V<n>__*.sql` files.
+introduced as new Alembic revisions and SQL files.

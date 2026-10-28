@@ -1,1 +1,15 @@
 .env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Next.js
+.next/
+node_modules/
+
+# Tooling
+*.log

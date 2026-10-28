@@ -14,6 +14,7 @@ An AI-powered framework for holistic analysis, verification, and quality assessm
 - [Verification Report](#verification-report)
 - [Explainability and Human Review](#explainability-and-human-review)
 - [Technology Stack](#technology-stack)
+- [Getting Started](#getting-started)
 - [Functional Requirements](#functional-requirements)
 - [Non-Functional Requirements](#non-functional-requirements)
 - [Scope](#scope)
@@ -269,7 +270,10 @@ AI Analysis -> Potential Finding -> Evidence and Explanation
 - Python
 - FastAPI
 - Pydantic
+- SQLAlchemy
+- Alembic
 - Uvicorn
+- JWT bearer authentication
 
 ### AI and NLP
 
@@ -286,8 +290,9 @@ AI Analysis -> Potential Finding -> Evidence and Explanation
 
 ### Frontend and Documents
 
+- Next.js (App Router)
 - React.js
-- JavaScript / TypeScript
+- TypeScript
 - Tailwind CSS
 - Graph visualization library
 - PDF parsers, OCR, and document loaders as required
@@ -298,6 +303,37 @@ AI Analysis -> Potential Finding -> Evidence and Explanation
 - Postman
 - VS Code
 - Docker
+- uv (Python dependency and environment management)
+
+## Getting Started
+
+### Backend
+
+```text
+cd backend
+cp .env.example .env
+# set DATABASE_URL, JWT_SECRET, and optionally BOOTSTRAP_ADMIN_PASSWORD
+uv sync
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload
+```
+
+The API is available at `http://localhost:8000`, with interactive
+documentation at `http://localhost:8000/docs`. When
+`BOOTSTRAP_ADMIN_PASSWORD` is set, the first start creates an administrator
+account if it does not already exist.
+
+### Frontend
+
+```text
+cd Frontend
+cp .env.example .env.local
+npm install
+npm run dev
+```
+
+The frontend runs at `http://localhost:3000` and signs in against the FastAPI
+API.
 
 ## Functional Requirements
 
@@ -355,27 +391,26 @@ The project will be evaluated using technical and domain-specific metrics:
 curriculum-intelligence-framework/
 |
 |-- backend/
+|   |-- alembic/
+|   |   |-- sql/
+|   |   `-- versions/
 |   |-- app/
 |   |   |-- api/
 |   |   |-- core/
-|   |   |-- models/
+|   |   |-- db/
+|   |   |-- repositories/
 |   |   |-- schemas/
 |   |   |-- services/
-|   |   |-- graph/
-|   |   |-- nlp/
-|   |   |-- verification/
 |   |   `-- main.py
 |   |-- tests/
-|   |-- requirements.txt
-|   `-- README.md
+|   |-- alembic.ini
+|   |-- pyproject.toml
+|   `-- uv.lock
 |
-|-- frontend/
+|-- Frontend/
 |   |-- src/
-|   |   |-- components/
-|   |   |-- pages/
-|   |   |-- services/
-|   |   |-- hooks/
-|   |   `-- utils/
+|   |   |-- app/
+|   |   `-- lib/
 |   |-- public/
 |   |-- package.json
 |   `-- README.md
@@ -417,6 +452,9 @@ curriculum-intelligence-framework/
 - [x] Initial system objectives
 - [x] Initial architecture planning
 - [x] Curriculum relational data model and PostgreSQL schema (`docs/lld/database-schema.md`)
+- [x] FastAPI backend foundation with layered architecture
+- [x] FR-01 user authentication, JWT authorization, and role management (`docs/lld/authentication.md`)
+- [x] Next.js frontend shell with login and authenticated dashboard
 
 ### In Progress
 
@@ -427,9 +465,11 @@ curriculum-intelligence-framework/
 
 ### Planned
 
+- [ ] Curriculum and course management APIs
+- [ ] Program outcome and CO-PO mapping APIs
+- [ ] Prerequisite management and verification
 - [ ] Knowledge graph implementation
 - [ ] Verification engine
-- [ ] CO-PO and prerequisite analysis
 - [ ] Topic overlap analysis
 - [ ] Accreditation and industry relevance analysis
 - [ ] Curriculum visualization

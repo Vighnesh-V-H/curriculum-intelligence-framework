@@ -6,10 +6,17 @@ This project is an AI-powered curriculum design and
 verification framework.
 
 Backend:
-- Java
-- Spring Boot
+- Python
+- FastAPI
+- SQLAlchemy
+- Alembic
 - PostgreSQL
 - Neo4j
+
+Frontend:
+- Next.js (App Router)
+- TypeScript
+- Tailwind CSS
 
 AI services:
 - Python
@@ -35,7 +42,7 @@ the existing design.
 
 Follow:
 
-Controller
+Router / Controller
     ↓
 Service
     ↓
@@ -43,11 +50,20 @@ Repository
     ↓
 Database
 
-Controllers must not contain business logic.
+Routers must not contain business logic.
 
 Repositories must not contain business logic.
 
 Business logic belongs in the service/domain layer.
+
+Backend package layout:
+
+- `backend/app/api/` — FastAPI routers and dependencies
+- `backend/app/services/` — business logic
+- `backend/app/repositories/` — data access
+- `backend/app/db/` — SQLAlchemy models and session
+- `backend/app/schemas/` — Pydantic request/response DTOs
+- `backend/app/core/` — configuration and security
 
 ## 4. Design Rules
 
@@ -68,11 +84,13 @@ of following a pattern.
 - Do not expose persistence entities directly.
 - Validate incoming requests.
 - Use consistent error responses.
+- Protect endpoints with JWT bearer authentication and role-based
+  authorization where the requirements define access restrictions.
 
 ## 6. Database Rules
 
 - PostgreSQL is the primary relational database.
-- Use migrations for schema changes.
+- Use Alembic migrations for schema changes (`backend/alembic/`).
 - Do not modify production schema manually.
 - Keep entity relationships consistent with the LLD.
 
@@ -80,9 +98,21 @@ of following a pattern.
 
 Every new feature should have appropriate tests.
 
-Run:
+Backend:
 
-./mvnw test
+```text
+cd backend
+uv run pytest
+uv run ruff check .
+```
+
+Frontend:
+
+```text
+cd Frontend
+npm run lint
+npm run build
+```
 
 Do not consider a feature complete if tests fail.
 
