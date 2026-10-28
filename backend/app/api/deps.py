@@ -14,9 +14,23 @@ from app.core.security import (
 )
 from app.db.models.user import RoleCode, User, UserStatus
 from app.db.session import get_db
+from app.repositories.academic import (
+    CourseTypeRepository,
+    DepartmentRepository,
+    ProgramRepository,
+)
+from app.repositories.audit import AuditLogRepository
+from app.repositories.courses import CourseRepository
+from app.repositories.curricula import (
+    CurriculumRepository,
+    CurriculumVersionRepository,
+    SemesterRepository,
+)
 from app.repositories.roles import RoleRepository
 from app.repositories.users import UserRepository
+from app.services.academic import AcademicService
 from app.services.auth import AuthService
+from app.services.curriculum import CurriculumService
 from app.services.users import UserService
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -46,6 +60,77 @@ def get_user_service(
     passwords: PasswordService = Depends(get_password_service),
 ) -> UserService:
     return UserService(session, users, roles, passwords)
+
+
+def get_department_repository(
+    session: Session = Depends(get_db),
+) -> DepartmentRepository:
+    return DepartmentRepository(session)
+
+
+def get_program_repository(session: Session = Depends(get_db)) -> ProgramRepository:
+    return ProgramRepository(session)
+
+
+def get_course_type_repository(
+    session: Session = Depends(get_db),
+) -> CourseTypeRepository:
+    return CourseTypeRepository(session)
+
+
+def get_curriculum_repository(
+    session: Session = Depends(get_db),
+) -> CurriculumRepository:
+    return CurriculumRepository(session)
+
+
+def get_curriculum_version_repository(
+    session: Session = Depends(get_db),
+) -> CurriculumVersionRepository:
+    return CurriculumVersionRepository(session)
+
+
+def get_semester_repository(session: Session = Depends(get_db)) -> SemesterRepository:
+    return SemesterRepository(session)
+
+
+def get_course_repository(session: Session = Depends(get_db)) -> CourseRepository:
+    return CourseRepository(session)
+
+
+def get_audit_log_repository(session: Session = Depends(get_db)) -> AuditLogRepository:
+    return AuditLogRepository(session)
+
+
+def get_academic_service(
+    session: Session = Depends(get_db),
+    departments: DepartmentRepository = Depends(get_department_repository),
+    programs: ProgramRepository = Depends(get_program_repository),
+    course_types: CourseTypeRepository = Depends(get_course_type_repository),
+) -> AcademicService:
+    return AcademicService(session, departments, programs, course_types)
+
+
+def get_curriculum_service(
+    session: Session = Depends(get_db),
+    programs: ProgramRepository = Depends(get_program_repository),
+    course_types: CourseTypeRepository = Depends(get_course_type_repository),
+    curricula: CurriculumRepository = Depends(get_curriculum_repository),
+    versions: CurriculumVersionRepository = Depends(get_curriculum_version_repository),
+    semesters: SemesterRepository = Depends(get_semester_repository),
+    courses: CourseRepository = Depends(get_course_repository),
+    audit_logs: AuditLogRepository = Depends(get_audit_log_repository),
+) -> CurriculumService:
+    return CurriculumService(
+        session,
+        programs,
+        course_types,
+        curricula,
+        versions,
+        semesters,
+        courses,
+        audit_logs,
+    )
 
 
 def get_current_user(

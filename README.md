@@ -454,6 +454,12 @@ curriculum-intelligence-framework/
 - [x] Curriculum relational data model and PostgreSQL schema (`docs/lld/database-schema.md`)
 - [x] FastAPI backend foundation with layered architecture
 - [x] FR-01 user authentication, JWT authorization, and role management (`docs/lld/authentication.md`)
+- [x] FR-02 create curriculum with initial draft version and academic structure
+- [x] FR-03 update curriculum, with published versions locked for editing
+- [x] FR-04 curriculum versioning, status workflow, and version comparison
+- [x] FR-05 add course to an editable curriculum version
+- [x] FR-06 update course details and semester allocation
+  (`docs/lld/curriculum-management.md`)
 - [x] Next.js frontend shell with login and authenticated dashboard
 
 ### In Progress
@@ -465,7 +471,7 @@ curriculum-intelligence-framework/
 
 ### Planned
 
-- [ ] Curriculum and course management APIs
+- [ ] Curriculum and course management UI
 - [ ] Program outcome and CO-PO mapping APIs
 - [ ] Prerequisite management and verification
 - [ ] Knowledge graph implementation
