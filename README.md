@@ -464,6 +464,8 @@ curriculum-intelligence-framework/
 - [x] FR-08 Program Outcome management with version workflow and audit trail
 - [x] FR-09 Program Educational Objective management with version workflow
   (`docs/lld/program-outcomes.md`)
+- [x] FR-10 Course Outcome management and CO-PO mapping with review workflow
+  (`docs/lld/co-po-mapping.md`)
 - [x] Next.js frontend shell with login and authenticated dashboard
 
 ### In Progress
@@ -476,7 +478,7 @@ curriculum-intelligence-framework/
 ### Planned
 
 - [ ] Curriculum and course management UI
-- [ ] Program outcome and CO-PO mapping APIs
+- [ ] Program outcome and CO-PO mapping UI
 - [ ] Prerequisite management and verification
 - [ ] Knowledge graph implementation
 - [ ] Verification engine

@@ -16,6 +16,14 @@ from app.db.models.academic import (
     VersionStatus,
 )
 from app.db.models.audit import AuditLog
+from app.db.models.mappings import (
+    CoPoMapping,
+    CoPoMappingVersion,
+    CurriculumVersionProgramOutcome,
+    MappingLevel,
+    MappingStatus,
+    MappingVersionStatus,
+)
 from app.db.models.outcomes import (
     OutcomeStatus,
     OutcomeVersionStatus,
@@ -28,6 +36,8 @@ from app.db.models.user import Role, RoleCode, User, UserRole, UserStatus
 
 __all__ = [
     "AuditLog",
+    "CoPoMapping",
+    "CoPoMappingVersion",
     "Course",
     "CourseOutcome",
     "CourseOutcomeStatus",
@@ -37,8 +47,12 @@ __all__ = [
     "Curriculum",
     "CurriculumStatus",
     "CurriculumVersion",
+    "CurriculumVersionProgramOutcome",
     "Department",
     "DepartmentStatus",
+    "MappingLevel",
+    "MappingStatus",
+    "MappingVersionStatus",
     "OutcomeStatus",
     "OutcomeVersionStatus",
     "PeoVersion",

@@ -32,12 +32,19 @@ from app.repositories.curricula import (
     CurriculumVersionRepository,
     SemesterRepository,
 )
+from app.repositories.mappings import (
+    CoPoMappingRepository,
+    CoPoMappingVersionRepository,
+    CurriculumVersionProgramOutcomeRepository,
+    MappingLevelRepository,
+)
 from app.repositories.outcomes import OutcomeRepository, OutcomeVersionRepository
 from app.repositories.roles import RoleRepository
 from app.repositories.users import UserRepository
 from app.services.academic import AcademicService
 from app.services.auth import AuthService
 from app.services.curriculum import CurriculumService
+from app.services.mappings import MappingService
 from app.services.outcomes import OutcomeService
 from app.services.users import UserService
 
@@ -116,6 +123,30 @@ def get_audit_log_repository(session: Session = Depends(get_db)) -> AuditLogRepo
     return AuditLogRepository(session)
 
 
+def get_mapping_level_repository(
+    session: Session = Depends(get_db),
+) -> MappingLevelRepository:
+    return MappingLevelRepository(session)
+
+
+def get_curriculum_version_outcome_repository(
+    session: Session = Depends(get_db),
+) -> CurriculumVersionProgramOutcomeRepository:
+    return CurriculumVersionProgramOutcomeRepository(session)
+
+
+def get_mapping_repository(
+    session: Session = Depends(get_db),
+) -> CoPoMappingRepository:
+    return CoPoMappingRepository(session)
+
+
+def get_mapping_version_repository(
+    session: Session = Depends(get_db),
+) -> CoPoMappingVersionRepository:
+    return CoPoMappingVersionRepository(session)
+
+
 def get_program_outcome_repository(
     session: Session = Depends(get_db),
 ) -> OutcomeRepository:
@@ -189,6 +220,38 @@ def get_outcome_service(
         program_outcome_versions,
         peos,
         peo_versions,
+        audit_logs,
+    )
+
+
+def get_mapping_service(
+    session: Session = Depends(get_db),
+    curricula: CurriculumRepository = Depends(get_curriculum_repository),
+    versions: CurriculumVersionRepository = Depends(get_curriculum_version_repository),
+    course_outcomes: CourseOutcomeRepository = Depends(get_course_outcome_repository),
+    program_outcomes: OutcomeRepository = Depends(get_program_outcome_repository),
+    program_outcome_versions: OutcomeVersionRepository = Depends(
+        get_program_outcome_version_repository
+    ),
+    levels: MappingLevelRepository = Depends(get_mapping_level_repository),
+    pins: CurriculumVersionProgramOutcomeRepository = Depends(
+        get_curriculum_version_outcome_repository
+    ),
+    mappings: CoPoMappingRepository = Depends(get_mapping_repository),
+    mapping_versions: CoPoMappingVersionRepository = Depends(get_mapping_version_repository),
+    audit_logs: AuditLogRepository = Depends(get_audit_log_repository),
+) -> MappingService:
+    return MappingService(
+        session,
+        curricula,
+        versions,
+        course_outcomes,
+        program_outcomes,
+        program_outcome_versions,
+        levels,
+        pins,
+        mappings,
+        mapping_versions,
         audit_logs,
     )
 
