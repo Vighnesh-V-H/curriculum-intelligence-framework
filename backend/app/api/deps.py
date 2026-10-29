@@ -39,6 +39,7 @@ from app.repositories.mappings import (
     MappingLevelRepository,
 )
 from app.repositories.outcomes import OutcomeRepository, OutcomeVersionRepository
+from app.repositories.prerequisites import CoursePrerequisiteRepository
 from app.repositories.roles import RoleRepository
 from app.repositories.users import UserRepository
 from app.services.academic import AcademicService
@@ -46,6 +47,7 @@ from app.services.auth import AuthService
 from app.services.curriculum import CurriculumService
 from app.services.mappings import MappingService
 from app.services.outcomes import OutcomeService
+from app.services.prerequisites import PrerequisiteService
 from app.services.users import UserService
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -121,6 +123,12 @@ def get_course_outcome_repository(
 
 def get_audit_log_repository(session: Session = Depends(get_db)) -> AuditLogRepository:
     return AuditLogRepository(session)
+
+
+def get_prerequisite_repository(
+    session: Session = Depends(get_db),
+) -> CoursePrerequisiteRepository:
+    return CoursePrerequisiteRepository(session)
 
 
 def get_mapping_level_repository(
@@ -252,6 +260,24 @@ def get_mapping_service(
         pins,
         mappings,
         mapping_versions,
+        audit_logs,
+    )
+
+
+def get_prerequisite_service(
+    session: Session = Depends(get_db),
+    curricula: CurriculumRepository = Depends(get_curriculum_repository),
+    versions: CurriculumVersionRepository = Depends(get_curriculum_version_repository),
+    courses: CourseRepository = Depends(get_course_repository),
+    prerequisites: CoursePrerequisiteRepository = Depends(get_prerequisite_repository),
+    audit_logs: AuditLogRepository = Depends(get_audit_log_repository),
+) -> PrerequisiteService:
+    return PrerequisiteService(
+        session,
+        curricula,
+        versions,
+        courses,
+        prerequisites,
         audit_logs,
     )
 

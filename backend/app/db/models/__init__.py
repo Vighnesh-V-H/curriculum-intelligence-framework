@@ -56,6 +56,7 @@ __all__ = [
     "OutcomeStatus",
     "OutcomeVersionStatus",
     "PeoVersion",
+    "PrerequisiteStatus",
     "Program",
     "ProgramEducationalObjective",
     "ProgramOutcome",

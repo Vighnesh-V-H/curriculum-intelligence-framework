@@ -466,6 +466,8 @@ curriculum-intelligence-framework/
   (`docs/lld/program-outcomes.md`)
 - [x] FR-10 Course Outcome management and CO-PO mapping with review workflow
   (`docs/lld/co-po-mapping.md`)
+- [x] FR-11 Prerequisite management with cycle prevention and review workflow
+  (`docs/lld/prerequisite-management.md`)
 - [x] Next.js frontend shell with login and authenticated dashboard
 
 ### In Progress

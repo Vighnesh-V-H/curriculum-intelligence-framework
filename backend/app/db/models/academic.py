@@ -56,6 +56,13 @@ class CourseOutcomeStatus(StrEnum):
     INACTIVE = "INACTIVE"
 
 
+class PrerequisiteStatus(StrEnum):
+    PROPOSED = "PROPOSED"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    REMOVED = "REMOVED"
+
+
 class Department(Base):
     __tablename__ = "departments"
 
@@ -332,3 +339,6 @@ class CoursePrerequisite(Base):
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     target_course: Mapped[Course] = relationship(foreign_keys=[target_course_id], lazy="joined")
+    prerequisite_course: Mapped[Course] = relationship(
+        foreign_keys=[prerequisite_course_id], lazy="joined"
+    )
