@@ -459,6 +459,7 @@ curriculum-intelligence-framework/
 - [x] FR-04 curriculum versioning, status workflow, and version comparison
 - [x] FR-05 add course to an editable curriculum version
 - [x] FR-06 update course details and semester allocation
+- [x] FR-07 remove course with soft-delete history and dependency check
   (`docs/lld/curriculum-management.md`)
 - [x] Next.js frontend shell with login and authenticated dashboard
 

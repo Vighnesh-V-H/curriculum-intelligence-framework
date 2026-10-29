@@ -3,7 +3,7 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.models.academic import Course, CourseStatus
+from app.db.models.academic import Course, CoursePrerequisite, CourseStatus
 
 
 class CourseRepository:
@@ -28,6 +28,18 @@ class CourseRepository:
         if active_only:
             statement = statement.where(Course.status == CourseStatus.ACTIVE.value)
         statement = statement.order_by(Course.course_code)
+        return list(self._session.scalars(statement))
+
+    def get_referencing_prerequisites(self, course_id: uuid.UUID) -> list[Course]:
+        statement = (
+            select(Course)
+            .join(CoursePrerequisite, CoursePrerequisite.target_course_id == Course.id)
+            .where(
+                CoursePrerequisite.prerequisite_course_id == course_id,
+                CoursePrerequisite.status.in_(("PROPOSED", "APPROVED")),
+            )
+            .order_by(Course.course_code)
+        )
         return list(self._session.scalars(statement))
 
     def add(self, course: Course) -> Course:

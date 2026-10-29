@@ -153,3 +153,18 @@ def update_course(
     service: CurriculumService = Depends(get_curriculum_service),
 ) -> CourseResponse:
     return service.update_course(actor.id, curriculum_id, version_id, course_id, payload)
+
+
+@router.delete(
+    "/{curriculum_id}/versions/{version_id}/courses/{course_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def remove_course(
+    curriculum_id: uuid.UUID,
+    version_id: uuid.UUID,
+    course_id: uuid.UUID,
+    force: bool = Query(default=False),
+    actor: User = Depends(require_roles(*CURRICULUM_WRITE_ROLES)),
+    service: CurriculumService = Depends(get_curriculum_service),
+) -> None:
+    service.remove_course(actor.id, curriculum_id, version_id, course_id, force=force)

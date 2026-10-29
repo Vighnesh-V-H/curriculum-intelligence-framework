@@ -64,10 +64,17 @@ contact hours, description, and syllabus.
 | --- | --- | --- |
 | `POST` | `/api/v1/curricula/{curriculum_id}/versions/{version_id}/courses` | Add a course to a draft version |
 | `PATCH` | `/api/v1/curricula/{curriculum_id}/versions/{version_id}/courses/{course_id}` | Update a course in a draft version |
+| `DELETE` | `/api/v1/curricula/{curriculum_id}/versions/{version_id}/courses/{course_id}` | Soft-remove a course from a draft version |
 
 Course codes are unique among active courses of a version. A course's
 semester must belong to the same version. Course codes cannot be changed
 through the update endpoint.
+
+Removal is a soft delete (`status = REMOVED`) so historical versions and
+audit records remain intact. Before removing a course, the service checks
+for active prerequisite relationships that reference it. If any exist,
+the request is rejected with `course_has_dependencies` unless `force=true`
+is supplied. A removed course code may be reused within the same draft.
 
 ## Audit Trail
 

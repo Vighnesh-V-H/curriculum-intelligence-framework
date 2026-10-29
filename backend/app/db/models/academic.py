@@ -252,3 +252,33 @@ class Course(Base):
     version: Mapped[CurriculumVersion] = relationship(back_populates="courses")
     semester: Mapped[Semester] = relationship(back_populates="courses", lazy="joined")
     course_type: Mapped[CourseType] = relationship(lazy="joined")
+
+
+class CoursePrerequisite(Base):
+    __tablename__ = "course_prerequisites"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    curriculum_version_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("curriculum_versions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    prerequisite_course_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("courses.id"), nullable=False
+    )
+    target_course_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("courses.id"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="PROPOSED")
+    review_comments: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    target_course: Mapped[Course] = relationship(foreign_keys=[target_course_id], lazy="joined")

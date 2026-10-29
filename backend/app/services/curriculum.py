@@ -625,6 +625,57 @@ class CurriculumService:
 
         return CourseResponse.from_model(course)
 
+    def remove_course(
+        self,
+        actor_id: uuid.UUID,
+        curriculum_id: uuid.UUID,
+        version_id: uuid.UUID,
+        course_id: uuid.UUID,
+        force: bool = False,
+    ) -> None:
+        version = self._get_version_or_404(curriculum_id, version_id)
+        self._ensure_editable(version)
+        course = self._courses.get_by_id(course_id)
+        if (
+            course is None
+            or course.curriculum_version_id != version.id
+            or course.status != CourseStatus.ACTIVE.value
+        ):
+            raise NotFoundError("Course not found in this curriculum version")
+
+        dependencies = self._course_dependencies(course)
+        if dependencies and not force:
+            raise ConflictError(
+                "This course is referenced by other curriculum components: "
+                + ", ".join(dependencies),
+                "course_has_dependencies",
+            )
+
+        old_values = _course_snapshot(course)
+        course.status = CourseStatus.REMOVED.value
+        course.removed_by = actor_id
+        course.removed_at = utc_now()
+        course.updated_by = actor_id
+
+        self._audit(
+            actor_id=actor_id,
+            entity_type="course",
+            entity_id=course.id,
+            action="REMOVE",
+            curriculum_version_id=version.id,
+            old_values=old_values,
+            new_values={"status": CourseStatus.REMOVED.value},
+        )
+        self._session.commit()
+
+    def _course_dependencies(self, course: Course) -> list[str]:
+        dependencies: list[str] = []
+        referenced = self._courses.get_referencing_prerequisites(course.id)
+        dependencies.extend(
+            f"prerequisite of {referencing.course_code}" for referencing in referenced
+        )
+        return dependencies
+
     def _ensure_editable(self, version: CurriculumVersion) -> None:
         if version.status != VersionStatus.DRAFT.value:
             raise ConflictError(
