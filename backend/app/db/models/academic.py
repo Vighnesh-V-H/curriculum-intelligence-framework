@@ -51,6 +51,11 @@ class CourseStatus(StrEnum):
     REMOVED = "REMOVED"
 
 
+class CourseOutcomeStatus(StrEnum):
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+
+
 class Department(Base):
     __tablename__ = "departments"
 
@@ -252,6 +257,51 @@ class Course(Base):
     version: Mapped[CurriculumVersion] = relationship(back_populates="courses")
     semester: Mapped[Semester] = relationship(back_populates="courses", lazy="joined")
     course_type: Mapped[CourseType] = relationship(lazy="joined")
+    outcomes: Mapped[list["CourseOutcome"]] = relationship(
+        back_populates="course",
+        cascade="all, delete-orphan",
+        order_by="CourseOutcome.co_code",
+        lazy="selectin",
+    )
+
+
+class CourseOutcome(Base):
+    __tablename__ = "course_outcomes"
+    __table_args__ = (
+        Index(
+            "uq_course_outcomes_code_active",
+            "course_id",
+            "co_code",
+            unique=True,
+            postgresql_where=text("status = 'ACTIVE'"),
+            sqlite_where=text("status = 'ACTIVE'"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    course_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False
+    )
+    curriculum_version_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("curriculum_versions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    co_code: Mapped[str] = mapped_column(String(30), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=CourseOutcomeStatus.ACTIVE.value
+    )
+    created_by: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+    course: Mapped[Course] = relationship(back_populates="outcomes")
 
 
 class CoursePrerequisite(Base):

@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from app.core.errors import BadRequestError, ConflictError, NotFoundError
 from app.db.models.academic import (
     Course,
+    CourseOutcome,
+    CourseOutcomeStatus,
     CourseStatus,
     CourseType,
     Curriculum,
@@ -19,13 +21,18 @@ from app.db.models.audit import AuditLog
 from app.db.models.user import utc_now
 from app.repositories.academic import CourseTypeRepository, ProgramRepository
 from app.repositories.audit import AuditLogRepository
-from app.repositories.courses import CourseRepository
+from app.repositories.courses import CourseOutcomeRepository, CourseRepository
 from app.repositories.curricula import (
     CurriculumRepository,
     CurriculumVersionRepository,
     SemesterRepository,
 )
 from app.schemas.course import CourseCreate, CourseResponse, CourseUpdate
+from app.schemas.course_outcome import (
+    CourseOutcomeCreate,
+    CourseOutcomeResponse,
+    CourseOutcomeUpdate,
+)
 from app.schemas.curriculum import (
     CurriculumCreate,
     CurriculumDetailResponse,
@@ -90,6 +97,7 @@ class CurriculumService:
         versions: CurriculumVersionRepository,
         semesters: SemesterRepository,
         courses: CourseRepository,
+        course_outcomes: CourseOutcomeRepository,
         audit_logs: AuditLogRepository,
     ) -> None:
         self._session = session
@@ -99,6 +107,7 @@ class CurriculumService:
         self._versions = versions
         self._semesters = semesters
         self._courses = courses
+        self._course_outcomes = course_outcomes
         self._audit_logs = audit_logs
 
     def create_curriculum(
@@ -625,6 +634,175 @@ class CurriculumService:
 
         return CourseResponse.from_model(course)
 
+    def list_course_outcomes(
+        self,
+        curriculum_id: uuid.UUID,
+        version_id: uuid.UUID,
+        course_id: uuid.UUID,
+    ) -> list[CourseOutcomeResponse]:
+        version = self._get_version_or_404(curriculum_id, version_id)
+        course = self._get_active_course_or_404(version, course_id)
+        return [
+            CourseOutcomeResponse.from_model(outcome)
+            for outcome in self._course_outcomes.list_by_course(course.id)
+        ]
+
+    def add_course_outcome(
+        self,
+        actor_id: uuid.UUID,
+        curriculum_id: uuid.UUID,
+        version_id: uuid.UUID,
+        course_id: uuid.UUID,
+        request: CourseOutcomeCreate,
+    ) -> CourseOutcomeResponse:
+        version = self._get_version_or_404(curriculum_id, version_id)
+        self._ensure_editable(version)
+        course = self._get_active_course_or_404(version, course_id)
+        if self._course_outcomes.get_by_code(course.id, request.co_code) is not None:
+            raise ConflictError(
+                f"Course outcome {request.co_code} already exists for this course",
+                "course_outcome_exists",
+            )
+
+        outcome = CourseOutcome(
+            course_id=course.id,
+            curriculum_version_id=version.id,
+            co_code=request.co_code,
+            description=request.description,
+            status=CourseOutcomeStatus.ACTIVE.value,
+            created_by=actor_id,
+        )
+        try:
+            self._course_outcomes.add(outcome)
+            self._audit(
+                actor_id,
+                "course_outcome",
+                outcome.id,
+                "CREATE",
+                curriculum_version_id=version.id,
+                new_values={
+                    "course_id": str(course.id),
+                    "co_code": outcome.co_code,
+                    "description": outcome.description,
+                    "status": outcome.status,
+                },
+            )
+            self._session.commit()
+        except IntegrityError as exc:
+            self._session.rollback()
+            raise ConflictError(
+                f"Course outcome {request.co_code} already exists for this course",
+                "course_outcome_exists",
+            ) from exc
+
+        return CourseOutcomeResponse.from_model(outcome)
+
+    def update_course_outcome(
+        self,
+        actor_id: uuid.UUID,
+        curriculum_id: uuid.UUID,
+        version_id: uuid.UUID,
+        course_id: uuid.UUID,
+        outcome_id: uuid.UUID,
+        request: CourseOutcomeUpdate,
+    ) -> CourseOutcomeResponse:
+        version = self._get_version_or_404(curriculum_id, version_id)
+        self._ensure_editable(version)
+        course = self._get_active_course_or_404(version, course_id)
+        outcome = self._course_outcomes.get_by_id(outcome_id)
+        if (
+            outcome is None
+            or outcome.course_id != course.id
+            or outcome.status != CourseOutcomeStatus.ACTIVE.value
+        ):
+            raise NotFoundError("Course outcome not found")
+
+        changes = request.model_fields_set
+        if not changes:
+            return CourseOutcomeResponse.from_model(outcome)
+
+        old_values = {
+            "co_code": outcome.co_code,
+            "description": outcome.description,
+            "status": outcome.status,
+        }
+        if "co_code" in changes:
+            if request.co_code is None:
+                raise BadRequestError("Course outcome code cannot be empty")
+            duplicate = self._course_outcomes.get_by_code(course.id, request.co_code)
+            if duplicate is not None and duplicate.id != outcome.id:
+                raise ConflictError(
+                    f"Course outcome {request.co_code} already exists for this course",
+                    "course_outcome_exists",
+                )
+            outcome.co_code = request.co_code
+        if "description" in changes:
+            if request.description is None:
+                raise BadRequestError("Course outcome description cannot be empty")
+            outcome.description = request.description
+        outcome.updated_by = actor_id
+
+        self._audit(
+            actor_id,
+            "course_outcome",
+            outcome.id,
+            "UPDATE",
+            curriculum_version_id=version.id,
+            old_values=old_values,
+            new_values={
+                "co_code": outcome.co_code,
+                "description": outcome.description,
+                "status": outcome.status,
+            },
+        )
+        try:
+            self._session.commit()
+        except IntegrityError as exc:
+            self._session.rollback()
+            raise ConflictError(
+                "Course outcome could not be updated because of conflicting data",
+                "course_outcome_conflict",
+            ) from exc
+
+        return CourseOutcomeResponse.from_model(outcome)
+
+    def remove_course_outcome(
+        self,
+        actor_id: uuid.UUID,
+        curriculum_id: uuid.UUID,
+        version_id: uuid.UUID,
+        course_id: uuid.UUID,
+        outcome_id: uuid.UUID,
+    ) -> None:
+        version = self._get_version_or_404(curriculum_id, version_id)
+        self._ensure_editable(version)
+        course = self._get_active_course_or_404(version, course_id)
+        outcome = self._course_outcomes.get_by_id(outcome_id)
+        if (
+            outcome is None
+            or outcome.course_id != course.id
+            or outcome.status != CourseOutcomeStatus.ACTIVE.value
+        ):
+            raise NotFoundError("Course outcome not found")
+
+        old_values = {
+            "co_code": outcome.co_code,
+            "description": outcome.description,
+            "status": outcome.status,
+        }
+        outcome.status = CourseOutcomeStatus.INACTIVE.value
+        outcome.updated_by = actor_id
+        self._audit(
+            actor_id,
+            "course_outcome",
+            outcome.id,
+            "REMOVE",
+            curriculum_version_id=version.id,
+            old_values=old_values,
+            new_values={"status": outcome.status},
+        )
+        self._session.commit()
+
     def remove_course(
         self,
         actor_id: uuid.UUID,
@@ -675,6 +853,16 @@ class CurriculumService:
             f"prerequisite of {referencing.course_code}" for referencing in referenced
         )
         return dependencies
+
+    def _get_active_course_or_404(self, version: CurriculumVersion, course_id: uuid.UUID) -> Course:
+        course = self._courses.get_by_id(course_id)
+        if (
+            course is None
+            or course.curriculum_version_id != version.id
+            or course.status != CourseStatus.ACTIVE.value
+        ):
+            raise NotFoundError("Course not found in this curriculum version")
+        return course
 
     def _ensure_editable(self, version: CurriculumVersion) -> None:
         if version.status != VersionStatus.DRAFT.value:

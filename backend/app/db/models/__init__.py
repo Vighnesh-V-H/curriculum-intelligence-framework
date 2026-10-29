@@ -1,5 +1,7 @@
 from app.db.models.academic import (
     Course,
+    CourseOutcome,
+    CourseOutcomeStatus,
     CoursePrerequisite,
     CourseStatus,
     CourseType,
@@ -27,6 +29,8 @@ from app.db.models.user import Role, RoleCode, User, UserRole, UserStatus
 __all__ = [
     "AuditLog",
     "Course",
+    "CourseOutcome",
+    "CourseOutcomeStatus",
     "CoursePrerequisite",
     "CourseStatus",
     "CourseType",

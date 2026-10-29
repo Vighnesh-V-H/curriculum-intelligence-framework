@@ -26,7 +26,7 @@ from app.repositories.academic import (
     ProgramRepository,
 )
 from app.repositories.audit import AuditLogRepository
-from app.repositories.courses import CourseRepository
+from app.repositories.courses import CourseOutcomeRepository, CourseRepository
 from app.repositories.curricula import (
     CurriculumRepository,
     CurriculumVersionRepository,
@@ -106,6 +106,12 @@ def get_course_repository(session: Session = Depends(get_db)) -> CourseRepositor
     return CourseRepository(session)
 
 
+def get_course_outcome_repository(
+    session: Session = Depends(get_db),
+) -> CourseOutcomeRepository:
+    return CourseOutcomeRepository(session)
+
+
 def get_audit_log_repository(session: Session = Depends(get_db)) -> AuditLogRepository:
     return AuditLogRepository(session)
 
@@ -149,6 +155,7 @@ def get_curriculum_service(
     versions: CurriculumVersionRepository = Depends(get_curriculum_version_repository),
     semesters: SemesterRepository = Depends(get_semester_repository),
     courses: CourseRepository = Depends(get_course_repository),
+    course_outcomes: CourseOutcomeRepository = Depends(get_course_outcome_repository),
     audit_logs: AuditLogRepository = Depends(get_audit_log_repository),
 ) -> CurriculumService:
     return CurriculumService(
@@ -159,6 +166,7 @@ def get_curriculum_service(
         versions,
         semesters,
         courses,
+        course_outcomes,
         audit_logs,
     )
 
