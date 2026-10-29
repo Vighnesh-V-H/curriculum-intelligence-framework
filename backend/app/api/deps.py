@@ -42,6 +42,10 @@ from app.repositories.outcomes import OutcomeRepository, OutcomeVersionRepositor
 from app.repositories.prerequisites import CoursePrerequisiteRepository
 from app.repositories.roles import RoleRepository
 from app.repositories.users import UserRepository
+from app.repositories.verification import (
+    VerificationFindingRepository,
+    VerificationRunRepository,
+)
 from app.services.academic import AcademicService
 from app.services.auth import AuthService
 from app.services.curriculum import CurriculumService
@@ -49,6 +53,7 @@ from app.services.mappings import MappingService
 from app.services.outcomes import OutcomeService
 from app.services.prerequisites import PrerequisiteService
 from app.services.users import UserService
+from app.services.verification import VerificationService
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -278,6 +283,40 @@ def get_prerequisite_service(
         versions,
         courses,
         prerequisites,
+        audit_logs,
+    )
+
+
+def get_verification_run_repository(
+    session: Session = Depends(get_db),
+) -> VerificationRunRepository:
+    return VerificationRunRepository(session)
+
+
+def get_verification_finding_repository(
+    session: Session = Depends(get_db),
+) -> VerificationFindingRepository:
+    return VerificationFindingRepository(session)
+
+
+def get_verification_service(
+    session: Session = Depends(get_db),
+    curricula: CurriculumRepository = Depends(get_curriculum_repository),
+    versions: CurriculumVersionRepository = Depends(get_curriculum_version_repository),
+    courses: CourseRepository = Depends(get_course_repository),
+    prerequisites: CoursePrerequisiteRepository = Depends(get_prerequisite_repository),
+    runs: VerificationRunRepository = Depends(get_verification_run_repository),
+    findings: VerificationFindingRepository = Depends(get_verification_finding_repository),
+    audit_logs: AuditLogRepository = Depends(get_audit_log_repository),
+) -> VerificationService:
+    return VerificationService(
+        session,
+        curricula,
+        versions,
+        courses,
+        prerequisites,
+        runs,
+        findings,
         audit_logs,
     )
 

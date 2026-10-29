@@ -10,6 +10,7 @@ from app.db.models.academic import (
     CurriculumVersion,
     Department,
     DepartmentStatus,
+    PrerequisiteStatus,
     Program,
     ProgramStatus,
     Semester,
@@ -33,6 +34,16 @@ from app.db.models.outcomes import (
     ProgramOutcomeVersion,
 )
 from app.db.models.user import Role, RoleCode, User, UserRole, UserStatus
+from app.db.models.verification import (
+    FindingCategory,
+    FindingSeverity,
+    ReferenceEntityType,
+    ReviewStatus,
+    VerificationFinding,
+    VerificationFindingReference,
+    VerificationRun,
+    VerificationRunStatus,
+)
 
 __all__ = [
     "AuditLog",
@@ -50,6 +61,8 @@ __all__ = [
     "CurriculumVersionProgramOutcome",
     "Department",
     "DepartmentStatus",
+    "FindingCategory",
+    "FindingSeverity",
     "MappingLevel",
     "MappingStatus",
     "MappingVersionStatus",
@@ -62,11 +75,17 @@ __all__ = [
     "ProgramOutcome",
     "ProgramOutcomeVersion",
     "ProgramStatus",
+    "ReferenceEntityType",
+    "ReviewStatus",
     "Role",
     "RoleCode",
     "Semester",
     "User",
     "UserRole",
     "UserStatus",
+    "VerificationFinding",
+    "VerificationFindingReference",
+    "VerificationRun",
+    "VerificationRunStatus",
     "VersionStatus",
 ]

@@ -468,6 +468,8 @@ curriculum-intelligence-framework/
   (`docs/lld/co-po-mapping.md`)
 - [x] FR-11 Prerequisite management with cycle prevention and review workflow
   (`docs/lld/prerequisite-management.md`)
+- [x] FR-12 Prerequisite verification engine with runs, findings, and audit trail
+  (`docs/lld/prerequisite-verification.md`)
 - [x] Next.js frontend shell with login and authenticated dashboard
 
 ### In Progress
@@ -481,7 +483,7 @@ curriculum-intelligence-framework/
 
 - [ ] Curriculum and course management UI
 - [ ] Program outcome and CO-PO mapping UI
-- [ ] Prerequisite management and verification
+- [ ] Verification findings review workflow
 - [ ] Knowledge graph implementation
 - [ ] Verification engine
 - [ ] Topic overlap analysis
