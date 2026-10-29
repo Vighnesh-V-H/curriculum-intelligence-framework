@@ -14,6 +14,14 @@ from app.db.models.academic import (
     VersionStatus,
 )
 from app.db.models.audit import AuditLog
+from app.db.models.outcomes import (
+    OutcomeStatus,
+    OutcomeVersionStatus,
+    PeoVersion,
+    ProgramEducationalObjective,
+    ProgramOutcome,
+    ProgramOutcomeVersion,
+)
 from app.db.models.user import Role, RoleCode, User, UserRole, UserStatus
 
 __all__ = [
@@ -27,7 +35,13 @@ __all__ = [
     "CurriculumVersion",
     "Department",
     "DepartmentStatus",
+    "OutcomeStatus",
+    "OutcomeVersionStatus",
+    "PeoVersion",
     "Program",
+    "ProgramEducationalObjective",
+    "ProgramOutcome",
+    "ProgramOutcomeVersion",
     "ProgramStatus",
     "Role",
     "RoleCode",

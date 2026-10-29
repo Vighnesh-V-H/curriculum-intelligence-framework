@@ -12,6 +12,12 @@ from app.core.security import (
     get_jwt_service,
     get_password_service,
 )
+from app.db.models.outcomes import (
+    PeoVersion,
+    ProgramEducationalObjective,
+    ProgramOutcome,
+    ProgramOutcomeVersion,
+)
 from app.db.models.user import RoleCode, User, UserStatus
 from app.db.session import get_db
 from app.repositories.academic import (
@@ -26,11 +32,13 @@ from app.repositories.curricula import (
     CurriculumVersionRepository,
     SemesterRepository,
 )
+from app.repositories.outcomes import OutcomeRepository, OutcomeVersionRepository
 from app.repositories.roles import RoleRepository
 from app.repositories.users import UserRepository
 from app.services.academic import AcademicService
 from app.services.auth import AuthService
 from app.services.curriculum import CurriculumService
+from app.services.outcomes import OutcomeService
 from app.services.users import UserService
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -102,6 +110,28 @@ def get_audit_log_repository(session: Session = Depends(get_db)) -> AuditLogRepo
     return AuditLogRepository(session)
 
 
+def get_program_outcome_repository(
+    session: Session = Depends(get_db),
+) -> OutcomeRepository:
+    return OutcomeRepository(session, ProgramOutcome, "po_code")
+
+
+def get_program_outcome_version_repository(
+    session: Session = Depends(get_db),
+) -> OutcomeVersionRepository:
+    return OutcomeVersionRepository(session, ProgramOutcomeVersion, "program_outcome_id")
+
+
+def get_peo_repository(session: Session = Depends(get_db)) -> OutcomeRepository:
+    return OutcomeRepository(session, ProgramEducationalObjective, "peo_code")
+
+
+def get_peo_version_repository(
+    session: Session = Depends(get_db),
+) -> OutcomeVersionRepository:
+    return OutcomeVersionRepository(session, PeoVersion, "peo_id")
+
+
 def get_academic_service(
     session: Session = Depends(get_db),
     departments: DepartmentRepository = Depends(get_department_repository),
@@ -129,6 +159,28 @@ def get_curriculum_service(
         versions,
         semesters,
         courses,
+        audit_logs,
+    )
+
+
+def get_outcome_service(
+    session: Session = Depends(get_db),
+    programs: ProgramRepository = Depends(get_program_repository),
+    program_outcomes: OutcomeRepository = Depends(get_program_outcome_repository),
+    program_outcome_versions: OutcomeVersionRepository = Depends(
+        get_program_outcome_version_repository
+    ),
+    peos: OutcomeRepository = Depends(get_peo_repository),
+    peo_versions: OutcomeVersionRepository = Depends(get_peo_version_repository),
+    audit_logs: AuditLogRepository = Depends(get_audit_log_repository),
+) -> OutcomeService:
+    return OutcomeService(
+        session,
+        programs,
+        program_outcomes,
+        program_outcome_versions,
+        peos,
+        peo_versions,
         audit_logs,
     )
 

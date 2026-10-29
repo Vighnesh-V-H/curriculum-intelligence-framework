@@ -461,6 +461,9 @@ curriculum-intelligence-framework/
 - [x] FR-06 update course details and semester allocation
 - [x] FR-07 remove course with soft-delete history and dependency check
   (`docs/lld/curriculum-management.md`)
+- [x] FR-08 Program Outcome management with version workflow and audit trail
+- [x] FR-09 Program Educational Objective management with version workflow
+  (`docs/lld/program-outcomes.md`)
 - [x] Next.js frontend shell with login and authenticated dashboard
 
 ### In Progress
