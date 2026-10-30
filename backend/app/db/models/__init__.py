@@ -17,6 +17,7 @@ from app.db.models.academic import (
     VersionStatus,
 )
 from app.db.models.audit import AuditLog
+from app.db.models.document import Document, DocumentStatus
 from app.db.models.mappings import (
     CoPoMapping,
     CoPoMappingVersion,
@@ -61,6 +62,8 @@ __all__ = [
     "CurriculumVersionProgramOutcome",
     "Department",
     "DepartmentStatus",
+    "Document",
+    "DocumentStatus",
     "FindingCategory",
     "FindingSeverity",
     "MappingLevel",

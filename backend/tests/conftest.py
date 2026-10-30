@@ -1,4 +1,5 @@
 import os
+import tempfile
 import uuid
 from datetime import timedelta
 
@@ -6,9 +7,13 @@ os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["JWT_SECRET"] = "test-jwt-secret-that-is-at-least-32-characters"
 os.environ["ACCESS_TOKEN_EXPIRE_MINUTES"] = "60"
 os.environ["BOOTSTRAP_ADMIN_PASSWORD"] = ""
+os.environ["UPLOAD_DIR"] = tempfile.mkdtemp(prefix="curriculum-uploads-")
+os.environ["MAX_UPLOAD_SIZE_MB"] = "1"
+os.environ["ALLOWED_UPLOAD_EXTENSIONS"] = '[".pdf", ".docx", ".txt", ".md", ".csv"]'
 os.environ.pop("BOOTSTRAP_ADMIN_USERNAME", None)
 os.environ.pop("BOOTSTRAP_ADMIN_EMAIL", None)
 os.environ.pop("CORS_ORIGINS", None)
+os.environ.pop("LLM_API_KEY", None)
 
 import pytest
 from fastapi.testclient import TestClient

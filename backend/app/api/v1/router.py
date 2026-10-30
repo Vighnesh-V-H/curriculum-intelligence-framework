@@ -4,6 +4,7 @@ from app.api.v1 import (
     academic,
     auth,
     curricula,
+    documents,
     mappings,
     outcomes,
     prerequisites,
@@ -16,6 +17,7 @@ api_router.include_router(auth.router)
 api_router.include_router(users.router)
 api_router.include_router(academic.router)
 api_router.include_router(curricula.router)
+api_router.include_router(documents.router)
 api_router.include_router(outcomes.router)
 api_router.include_router(mappings.router)
 api_router.include_router(prerequisites.router)

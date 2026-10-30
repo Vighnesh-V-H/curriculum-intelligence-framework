@@ -7,18 +7,21 @@ dependencies = [
     "alembic>=1.15",
     "email-validator>=2.2",
     "fastapi>=0.116",
+    "httpx>=0.28",
     "psycopg[binary]>=3.2",
     "pwdlib[argon2]>=0.3",
     "pydantic>=2.11",
     "pydantic-settings>=2.10",
     "PyJWT>=2.10",
+    "pypdf>=5.0",
+    "python-docx>=1.1",
+    "python-multipart>=0.0.20",
     "sqlalchemy>=2.0.41",
     "uvicorn[standard]>=0.35",
 ]
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28",
     "pytest>=8.4",
     "ruff>=0.12",
 ]

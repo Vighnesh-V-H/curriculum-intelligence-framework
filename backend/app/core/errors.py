@@ -33,3 +33,13 @@ class NotFoundError(AppError):
 class ConflictError(AppError):
     def __init__(self, message: str, code: str = "conflict") -> None:
         super().__init__(409, code, message)
+
+
+class PayloadTooLargeError(AppError):
+    def __init__(self, message: str, code: str = "file_too_large") -> None:
+        super().__init__(413, code, message)
+
+
+class ServiceUnavailableError(AppError):
+    def __init__(self, message: str, code: str = "service_unavailable") -> None:
+        super().__init__(503, code, message)

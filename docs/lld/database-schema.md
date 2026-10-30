@@ -530,6 +530,32 @@ be recorded"), FR-07, FR-08 (BR-PO-07), FR-09 (BR-PEO-07), FR-10
 | `old_values`, `new_values`, `metadata` | JSONB | field-level before/after snapshots |
 | `occurred_at` | TIMESTAMPTZ | not null, default `now()` |
 
+### 4.10 Document Processing (FR-13)
+
+#### `documents`
+
+Uploaded curriculum documents with local-storage references and
+LLM analysis results. Detailed design lives in
+`document-processing.md`.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | UUID PK | |
+| `original_filename` | VARCHAR(255) | not null, stored basename |
+| `file_extension` | VARCHAR(10) | not null, lowercase with dot |
+| `content_type` | VARCHAR(100) | declared client content type |
+| `size_bytes` | BIGINT | not null |
+| `checksum_sha256` | VARCHAR(64) | not null, traceability |
+| `storage_path` | VARCHAR(500) | not null, provider-relative key |
+| `status` | VARCHAR(20) | `UPLOADED`, `PROCESSING`, `COMPLETED`, `FAILED` |
+| `extracted_text` | TEXT | nullable; set on ingest |
+| `llm_analysis` | JSONB | nullable; parsed LLM output |
+| `llm_model` | VARCHAR(100) | nullable; model that produced the analysis |
+| `error_message` | TEXT | nullable; set on FAILED |
+| `uploaded_by` | UUID FK → `users` | not null |
+| `uploaded_at`, `processed_at` | TIMESTAMPTZ | |
+| `created_at`, `updated_at` | TIMESTAMPTZ | `updated_at` via trigger |
+
 ## 5. Requirement Traceability
 
 | Requirement | Tables |
@@ -546,6 +572,7 @@ be recorded"), FR-07, FR-08 (BR-PO-07), FR-09 (BR-PEO-07), FR-10
 | FR-10 CO-PO Mapping | `co_po_mappings`, `co_po_mapping_versions`, `mapping_levels`, `curriculum_version_program_outcomes`, `audit_logs` |
 | FR-11 Prerequisite Management | `course_prerequisites`, `courses`, `audit_logs` |
 | FR-12 Prerequisite Verification | `verification_runs`, `verification_findings`, `verification_finding_references`, `course_prerequisites`, `courses`, `audit_logs` |
+| FR-13 Document Processing | `documents`, `audit_logs` |
 | NFR-01 Performance (async verification) | `verification_runs`, `verification_findings`, `verification_finding_references` |
 
 ## 6. Design Decisions and Assumptions
@@ -638,10 +665,13 @@ requirements:
 - Topics and topic overlap analysis (`Topic`, `Course COVERS Topic`)
 - Skills and industry competencies
 - Accreditation requirements / OBE reference data
-- Document ingestion (syllabi, PDFs) and extraction metadata
 - Corequisite relationships (referenced by FR-07, not yet defined)
 - PO → PEO support mapping (`Program Outcome SUPPORTS PEO`)
 - Refresh tokens / session management for FR-01
+
+Document ingestion (syllabi, PDFs) is now covered by FR-13 and the
+`documents` table; see `document-processing.md` for the low-level
+design.
 
 ## 9. Migrations
 
@@ -649,6 +679,7 @@ requirements:
 | --- | --- |
 | `alembic/versions/0001_initial_schema.py` | Executes `alembic/sql/001_initial_schema.sql`: tables, constraints, indexes, triggers |
 | `alembic/versions/0002_seed_reference_data.py` | Executes `alembic/sql/002_seed_reference_data.sql`: roles, course types, mapping levels |
+| `alembic/versions/0003_document_ingestion.py` | Executes `alembic/sql/003_document_ingestion.sql`: `documents` table (FR-13) |
 
 Apply from the `backend/` directory:
 

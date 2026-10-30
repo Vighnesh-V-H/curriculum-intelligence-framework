@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -22,6 +23,13 @@ class Settings(BaseSettings):
     bootstrap_admin_username: str = "admin"
     bootstrap_admin_email: str = "admin@example.com"
     bootstrap_admin_password: SecretStr | None = None
+    upload_dir: Path = Path("local-storage/documents")
+    max_upload_size_mb: int = Field(default=20, gt=0)
+    allowed_upload_extensions: list[str] = [".pdf", ".docx", ".txt", ".md", ".csv"]
+    llm_base_url: str = "https://api.openai.com/v1"
+    llm_api_key: SecretStr | None = None
+    llm_model: str = "gpt-4o-mini"
+    llm_timeout_seconds: int = Field(default=120, gt=0)
 
     @field_validator("jwt_secret")
     @classmethod

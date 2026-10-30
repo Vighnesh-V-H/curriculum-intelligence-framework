@@ -4,6 +4,7 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.errors import ForbiddenError, UnauthorizedError
 from app.core.security import (
     JwtService,
@@ -32,6 +33,7 @@ from app.repositories.curricula import (
     CurriculumVersionRepository,
     SemesterRepository,
 )
+from app.repositories.documents import DocumentRepository
 from app.repositories.mappings import (
     CoPoMappingRepository,
     CoPoMappingVersionRepository,
@@ -49,6 +51,9 @@ from app.repositories.verification import (
 from app.services.academic import AcademicService
 from app.services.auth import AuthService
 from app.services.curriculum import CurriculumService
+from app.services.documents import DocumentProcessingService
+from app.services.llm import LLMClient
+from app.services.llm import get_llm_client as build_llm_client
 from app.services.mappings import MappingService
 from app.services.outcomes import OutcomeService
 from app.services.prerequisites import PrerequisiteService
@@ -297,6 +302,29 @@ def get_verification_finding_repository(
     session: Session = Depends(get_db),
 ) -> VerificationFindingRepository:
     return VerificationFindingRepository(session)
+
+
+def get_document_repository(session: Session = Depends(get_db)) -> DocumentRepository:
+    return DocumentRepository(session)
+
+
+def get_llm_client() -> LLMClient:
+    return build_llm_client()
+
+
+def get_document_service(
+    session: Session = Depends(get_db),
+    documents: DocumentRepository = Depends(get_document_repository),
+    audit_logs: AuditLogRepository = Depends(get_audit_log_repository),
+    llm_client: LLMClient = Depends(get_llm_client),
+) -> DocumentProcessingService:
+    return DocumentProcessingService(
+        session,
+        get_settings(),
+        documents,
+        audit_logs,
+        llm_client,
+    )
 
 
 def get_verification_service(
