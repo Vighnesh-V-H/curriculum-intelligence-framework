@@ -1,22 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { ApiError, User, api, clearStoredToken } from "@/lib/api";
 
-const UPCOMING_MODULES = [
+const MODULES = [
+  {
+    title: "Documents",
+    description: "Upload curriculum files and review AI analysis.",
+    href: "/documents",
+    available: true,
+  },
   {
     title: "Curriculum versions",
     description: "Create and revise programs, semesters, and courses.",
+    available: false,
   },
   {
     title: "Outcome mapping",
     description: "Manage program outcomes and CO-PO mappings.",
-  },
-  {
-    title: "Verification runs",
-    description: "Review AI findings and prerequisite checks.",
+    available: false,
   },
 ];
 
@@ -160,22 +165,43 @@ export default function DashboardPage() {
             Workspace modules
           </h2>
           <div className="mt-4 grid gap-4 md:grid-cols-3">
-            {UPCOMING_MODULES.map((module) => (
-              <article
-                key={module.title}
-                className="rounded-xl border border-dashed border-slate-300 bg-white/70 p-5"
-              >
-                <h3 className="text-sm font-semibold text-slate-800">
-                  {module.title}
-                </h3>
-                <p className="mt-2 text-sm text-slate-500">
-                  {module.description}
-                </p>
-                <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  Coming next
-                </p>
-              </article>
-            ))}
+            {MODULES.map((module) => {
+              const body = (
+                <>
+                  <h3 className="text-sm font-semibold text-slate-800">
+                    {module.title}
+                  </h3>
+                  <p className="mt-2 text-sm text-slate-500">
+                    {module.description}
+                  </p>
+                  <p
+                    className={
+                      module.available
+                        ? "mt-4 text-xs font-semibold uppercase tracking-wide text-indigo-600"
+                        : "mt-4 text-xs font-semibold uppercase tracking-wide text-slate-400"
+                    }
+                  >
+                    {module.available ? "Open module" : "Coming next"}
+                  </p>
+                </>
+              );
+              return module.available && module.href ? (
+                <Link
+                  key={module.title}
+                  href={module.href}
+                  className="rounded-xl border border-indigo-200 bg-white p-5 shadow-sm transition hover:border-indigo-400"
+                >
+                  {body}
+                </Link>
+              ) : (
+                <article
+                  key={module.title}
+                  className="rounded-xl border border-dashed border-slate-300 bg-white/70 p-5"
+                >
+                  {body}
+                </article>
+              );
+            })}
           </div>
         </section>
       </div>

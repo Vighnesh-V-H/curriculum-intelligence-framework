@@ -40,6 +40,11 @@ class PayloadTooLargeError(AppError):
         super().__init__(413, code, message)
 
 
+class BadGatewayError(AppError):
+    def __init__(self, message: str, code: str = "bad_gateway") -> None:
+        super().__init__(502, code, message)
+
+
 class ServiceUnavailableError(AppError):
     def __init__(self, message: str, code: str = "service_unavailable") -> None:
         super().__init__(503, code, message)

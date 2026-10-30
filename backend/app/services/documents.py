@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings
 from app.core.errors import (
+    BadGatewayError,
     BadRequestError,
     ConflictError,
     NotFoundError,
@@ -22,6 +23,11 @@ from app.repositories.audit import AuditLogRepository
 from app.repositories.documents import DocumentRepository
 from app.schemas.document import DocumentResponse
 from app.services.llm import LLMClient, LLMNotConfiguredError, LLMResponseError
+from app.services.uploadthing import (
+    UploadThingClient,
+    UploadThingError,
+    UploadThingNotConfiguredError,
+)
 
 _PDF_MAGIC = b"%PDF-"
 _DOCX_MAGIC = b"PK\x03\x04"
@@ -85,12 +91,14 @@ class DocumentProcessingService:
         documents: DocumentRepository,
         audit_logs: AuditLogRepository,
         llm_client: LLMClient,
+        storage: UploadThingClient | None,
     ) -> None:
         self._session = session
         self._settings = settings
         self._documents = documents
         self._audit_logs = audit_logs
         self._llm_client = llm_client
+        self._storage = storage
 
     def upload(self, actor: User, uploaded_file: UploadFile) -> DocumentResponse:
         extension = _normalize_extension(uploaded_file.filename)
@@ -103,57 +111,51 @@ class DocumentProcessingService:
                 f"File type '{extension or 'unknown'}' is not allowed",
                 "unsupported_file_type",
             )
-
-        document_id = uuid.uuid4()
-        stored_name = f"{document_id}{extension}"
-        period = utc_now().strftime("%Y/%m")
-        target_dir = self._settings.upload_dir / period
-        target_dir.mkdir(parents=True, exist_ok=True)
-        temp_path = target_dir / f"{stored_name}.part"
-        final_path = target_dir / stored_name
-        storage_key = f"{period}/{stored_name}"
+        original_filename = self._safe_basename(uploaded_file.filename)
 
         max_bytes = self._settings.max_upload_size_mb * 1024 * 1024
         digest = hashlib.sha256()
         total = 0
         first_bytes = b""
-        try:
-            with temp_path.open("wb") as handle:
-                while True:
-                    chunk = uploaded_file.file.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    if total == 0:
-                        first_bytes = chunk[:8]
-                    total += len(chunk)
-                    if total > max_bytes:
-                        raise PayloadTooLargeError(
-                            "File exceeds the configured maximum upload size of "
-                            f"{self._settings.max_upload_size_mb} MB",
-                        )
-                    digest.update(chunk)
-                    handle.write(chunk)
+        buffer = io.BytesIO()
+        while True:
+            chunk = uploaded_file.file.read(1024 * 1024)
+            if not chunk:
+                break
             if total == 0:
-                raise BadRequestError("Uploaded file is empty", "empty_file")
-            self._verify_signature(extension, first_bytes)
-            temp_path.replace(final_path)
-        except (PayloadTooLargeError, BadRequestError):
-            temp_path.unlink(missing_ok=True)
-            raise
-        except OSError as exc:
-            temp_path.unlink(missing_ok=True)
-            raise BadRequestError(
-                f"File content could not be validated: {exc}", "invalid_file_content"
+                first_bytes = chunk[:8]
+            total += len(chunk)
+            if total > max_bytes:
+                raise PayloadTooLargeError(
+                    "File exceeds the configured maximum upload size of "
+                    f"{self._settings.max_upload_size_mb} MB"
+                )
+            digest.update(chunk)
+            buffer.write(chunk)
+        if total == 0:
+            raise BadRequestError("Uploaded file is empty", "empty_file")
+        self._verify_signature(extension, first_bytes)
+
+        if self._storage is None:
+            raise UploadThingNotConfiguredError()
+        try:
+            stored = self._storage.upload_file(
+                buffer.getvalue(), original_filename, uploaded_file.content_type
+            )
+        except UploadThingError as exc:
+            raise BadGatewayError(
+                f"Storage provider rejected the upload: {exc}",
+                "storage_provider_error",
             ) from exc
 
         document = Document(
-            id=document_id,
-            original_filename=self._safe_basename(uploaded_file.filename),
+            id=uuid.uuid4(),
+            original_filename=original_filename,
             file_extension=extension,
             content_type=uploaded_file.content_type,
             size_bytes=total,
             checksum_sha256=digest.hexdigest(),
-            storage_path=storage_key,
+            storage_path=stored.key,
             status=DocumentStatus.UPLOADED.value,
             uploaded_by=actor.id,
         )
@@ -166,6 +168,9 @@ class DocumentProcessingService:
         document = self._documents.get_by_id(document_id)
         if document is None:
             raise NotFoundError("Document not found")
+
+        if self._storage is None:
+            raise UploadThingNotConfiguredError()
 
         if document.status == DocumentStatus.PROCESSING.value:
             raise ConflictError(
@@ -230,12 +235,12 @@ class DocumentProcessingService:
             )
 
     def _read_stored_file(self, document: Document) -> bytes:
-        root = self._settings.upload_dir
-        path = root / document.storage_path
         try:
-            return path.read_bytes()
-        except OSError as exc:
-            raise DocumentIngestFailure(f"Stored file could not be read: {exc}") from exc
+            return self._storage.read_file(document.storage_path)
+        except (UploadThingError, OSError) as exc:
+            raise DocumentIngestFailure(
+                f"Stored file could not be downloaded: {exc}"
+            ) from exc
 
     def _fail(
         self,

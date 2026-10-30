@@ -16,6 +16,7 @@ dependencies = [
     "pypdf>=5.0",
     "python-docx>=1.1",
     "python-multipart>=0.0.20",
+    "sqids>=0.5",
     "sqlalchemy>=2.0.41",
     "uvicorn[standard]>=0.35",
 ]

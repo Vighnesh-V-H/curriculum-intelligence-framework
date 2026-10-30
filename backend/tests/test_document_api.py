@@ -1,15 +1,31 @@
+import base64
 import hashlib
 import io
-import os
+import json
 import uuid
+from collections.abc import Callable
+from unittest import mock
 
+import httpx
+import pytest
 from docx import Document as DocxBuilder
 
-from app.api.deps import get_llm_client
+from app.api.deps import get_llm_client, get_uploadthing_client
 from app.services.llm import LLMResponseError, OpenAICompatibleLLMClient
+from app.services.uploadthing import (
+    _KEY_ALPHABET,
+    UPLOADTHING_VERSION,
+    HttpxUploadThingClient,
+    UploadThingCredentials,
+    UploadThingError,
+    UploadThingNotConfiguredError,
+    _credentials_from_token,
+    _generate_file_key,
+    _js_query_encode,
+    _sign_url,
+    effect_hash_string,
+)
 from tests.conftest import bearer
-
-UPLOADS_ROOT = os.environ["UPLOAD_DIR"]
 
 
 class StubLLMClient:
@@ -35,21 +51,31 @@ def release_llm(client):
     client.app.dependency_overrides.pop(get_llm_client, None)
 
 
+def file_without_storage(client):
+    client.app.dependency_overrides[get_uploadthing_client] = lambda: None
+
+
+def file_with_provider_failure(client):
+    class FailingStorage:
+        def upload_file(self, data, filename, content_type=None):
+            raise UploadThingError("ingest down")
+
+        def read_file(self, key):
+            raise UploadThingError("ingest down")
+
+    client.app.dependency_overrides[get_uploadthing_client] = lambda: FailingStorage()
+
+
+def restore_default_storage(client, stub):
+    client.app.dependency_overrides[get_uploadthing_client] = lambda: stub
+
+
 def upload_file(client, token, *, filename, content, content_type=None):
     return client.post(
         "/api/v1/documents",
         files=[("file", (filename, content, content_type or "application/octet-stream"))],
         headers=bearer(token),
     )
-
-
-def find_stored_file(document_id: str, extension: str) -> bytes | None:
-    for root, _, names in os.walk(UPLOADS_ROOT):
-        for name in names:
-            if name == f"{document_id}{extension}":
-                with open(os.path.join(root, name), "rb") as handle:
-                    return handle.read()
-    return None
 
 
 def make_minimal_pdf(text: str) -> bytes:
@@ -116,7 +142,7 @@ def test_minimal_pdf_fixture_is_extractable():
 # ----------------------------------------------------------------- upload API
 
 
-def test_faculty_can_upload_text_document(client, faculty_token):
+def test_faculty_can_upload_text_document(client, faculty_token, storage_stub):
     content = b"B.Tech CSE curriculum draft ppt"
 
     response = upload_file(
@@ -136,10 +162,12 @@ def test_faculty_can_upload_text_document(client, faculty_token):
     assert body["size_bytes"] == len(content)
     assert body["checksum_sha256"] == hashlib.sha256(content).hexdigest()
     assert uuid.UUID(body["id"])
-    assert find_stored_file(body["id"], ".txt") == content
+    upload = storage_stub.uploads[-1]
+    assert upload["data"] == content
+    assert upload["filename"] == "curriculum-draft.txt"
 
 
-def test_uploaded_files_never_keep_the_original_name(client, faculty_token):
+def test_uploaded_files_never_keep_the_original_name(client, faculty_token, storage_stub):
     response = upload_file(
         client,
         faculty_token,
@@ -150,11 +178,11 @@ def test_uploaded_files_never_keep_the_original_name(client, faculty_token):
     assert response.status_code == 201
     body = response.json()
     assert body["original_filename"] == "passwd.txt"
-    stored = find_stored_file(body["id"], ".txt")
-    assert stored == b"harmless"
+    assert storage_stub.uploads[-1]["filename"] == "passwd.txt"
+    assert storage_stub.uploads[-1]["data"] == b"harmless"
 
 
-def test_docx_upload_is_accepted(client, faculty_token):
+def test_docx_upload_is_accepted(client, faculty_token, storage_stub):
     response = upload_file(
         client,
         faculty_token,
@@ -166,12 +194,55 @@ def test_docx_upload_is_accepted(client, faculty_token):
     assert response.status_code == 201
     body = response.json()
     assert body["file_extension"] == ".docx"
-    assert find_stored_file(body["id"], ".docx") is not None
+    assert storage_stub.uploads[-1]["data"] is not None
 
 
 def test_upload_requires_authentication(client):
     response = upload_file(client, None, filename="curriculum.txt", content=b"data")
     assert response.status_code == 401
+
+
+def test_green_upload_rejects_invalid_content_without_calling_storage(
+    client, faculty_token, storage_stub
+):
+    response = upload_file(
+        client, faculty_token, filename="fake.pdf", content=b"not a pdf at all"
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "invalid_file_content"
+    assert storage_stub.uploads == []
+
+
+def test_upload_without_storage_configuration_returns_service_unavailable(
+    client, faculty_token, storage_stub
+):
+    file_without_storage(client)
+    try:
+        response = upload_file(
+            client, faculty_token, filename="ok.txt", content=b"data"
+        )
+    finally:
+        restore_default_storage(client, storage_stub)
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "storage_not_configured"
+    assert storage_stub.uploads == []
+
+
+def test_upload_storage_provider_failure_returns_bad_gateway(
+    client, faculty_token, storage_stub
+):
+    file_with_provider_failure(client)
+    try:
+        response = upload_file(
+            client, faculty_token, filename="ok.txt", content=b"data"
+        )
+    finally:
+        restore_default_storage(client, storage_stub)
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "storage_provider_error"
 
 
 def test_reviewer_cannot_upload(client, reviewer_token):
@@ -455,3 +526,157 @@ def test_ingest_unknown_document_returns_404(client, faculty_token):
         f"/api/v1/documents/{uuid.uuid4()}/ingest", headers=bearer(faculty_token)
     )
     assert response.status_code == 404
+
+
+def test_ingest_without_storage_configuration_returns_service_unavailable(
+    client, faculty_token, storage_stub
+):
+    uploaded = upload_file(
+        client, faculty_token, filename="syllabus.txt", content=b"content"
+    )
+    document_id = uploaded.json()["id"]
+    file_without_storage(client)
+    try:
+        response = client.post(
+            f"/api/v1/documents/{document_id}/ingest", headers=bearer(faculty_token)
+        )
+    finally:
+        restore_default_storage(client, storage_stub)
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "storage_not_configured"
+    stored = client.get(
+        f"/api/v1/documents/{document_id}", headers=bearer(faculty_token)
+    )
+    assert stored.json()["status"] == "UPLOADED"
+
+
+def test_ingest_read_failure_marks_document_failed(
+    client, faculty_token, storage_stub
+):
+    uploaded = upload_file(
+        client, faculty_token, filename="syllabus.txt", content=b"content"
+    )
+    document_id = uploaded.json()["id"]
+    storage_stub.files.clear()
+    response = client.post(
+        f"/api/v1/documents/{document_id}/ingest", headers=bearer(faculty_token)
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "FAILED"
+    assert "Stored file could not be downloaded" in body["error_message"]
+
+
+# ------------------------------------------------------- storage client parity
+
+
+def test_effect_hash_matches_reference_vectors():
+    assert effect_hash_string("") == 5381
+    assert effect_hash_string("hello") == 181380007
+    assert effect_hash_string("world") == 164394279
+
+
+def test_js_query_encoding_matches_urlsearchparams():
+    assert _js_query_encode("a b") == "a+b"
+    assert _js_query_encode("~x*") == "%7Ex*"
+    assert _js_query_encode("hmac-sha256=abc") == "hmac-sha256%3Dabc"
+    assert _js_query_encode("curriculum file.pdf") == "curriculum+file.pdf"
+
+
+def test_file_key_shape_and_deterministic_prefix():
+    first = _generate_file_key(
+        "app123", "curriculum.pdf", 100, "application/pdf", 1700000000000
+    )
+    second = _generate_file_key(
+        "app123", "curriculum.pdf", 100, "application/pdf", 1700000000000
+    )
+    other = _generate_file_key(
+        "app987", "curriculum.pdf", 100, "application/pdf", 1700000000000
+    )
+    assert len(first) >= 48
+    assert set(first) <= set(_KEY_ALPHABET)
+    assert first[:12] == second[:12]
+    assert first[:12] != other[:12]
+
+
+def test_token_credentials_are_parsed():
+    token = base64.b64encode(
+        json.dumps(
+            {"apiKey": "sk_live_abc", "appId": "ap1", "regions": ["fra1"]}
+        ).encode()
+    ).decode()
+    credentials = _credentials_from_token(
+        token, "ingest.uploadthing.com", "ufs.sh", "subdomain"
+    )
+    assert credentials.api_key == "sk_live_abc"
+    assert credentials.app_id == "ap1"
+    assert credentials.ingest_url == "https://fra1.ingest.uploadthing.com"
+    assert credentials.ufs_url_base == "https://ap1.ufs.sh"
+
+
+def test_invalid_token_reports_configuration_error():
+    with pytest.raises(UploadThingNotConfiguredError):
+        _credentials_from_token("broken", "ingest.uploadthing.com", "ufs.sh", "subdomain")
+
+
+def make_protocol_client(handler: Callable[[httpx.Request], httpx.Response]):
+    credentials = UploadThingCredentials(
+        api_key="sk_test_secret",
+        app_id="app123",
+        ingest_url="https://fra1.ingest.uploadthing.com",
+        ufs_url_base="https://app123.ufs.sh",
+        ufs_app_id_location="subdomain",
+    )
+    http_client = httpx.Client(transport=httpx.MockTransport(handler))
+    return HttpxUploadThingClient(credentials, timeout_seconds=5, http_client=http_client)
+
+
+def test_upload_request_matches_uploadthing_protocol():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["path"] = request.url.raw.raw_path.decode("utf-8")
+        captured["headers"] = dict(request.headers)
+        captured["body"] = request.content
+        return httpx.Response(
+            200, json={"ufsUrl": "https://app123.ufs.sh/f/out", "fileHash": "ff"}
+        )
+
+    with mock.patch("app.services.uploadthing._utc_now_ms", return_value=1700000000000):
+        uploaded = make_protocol_client(handler).upload_file(
+            b"hello world", "curriculum file.pdf", "application/pdf"
+        )
+
+    assert uploaded.key and uploaded.ufs_url == "https://app123.ufs.sh/f/out"
+    assert uploaded.file_hash == "ff"
+    assert captured["method"] == "PUT"
+    assert captured["path"].startswith(f"/{uploaded.key}?")
+    assert "curriculum+file.pdf" in captured["path"]
+    assert captured["headers"]["range"] == "bytes=0-"
+    assert captured["headers"]["x-uploadthing-version"] == UPLOADTHING_VERSION
+    wire_source = f"https://fra1.ingest.uploadthing.com{captured['path']}".split(
+        "&signature="
+    )[0]
+    signature = captured["path"].split("&signature=")[1]
+    assert signature == "hmac-sha256%3D" + _sign_url(wire_source, "sk_test_secret").split("=")[1]
+    assert b"hello world" in captured["body"]
+
+
+def test_read_request_matches_uploadthing_protocol():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.raw.raw_path.decode("utf-8")
+        return httpx.Response(200, content=b"\x00\x01readme")
+
+    with mock.patch("app.services.uploadthing._utc_now_ms", return_value=1700000000000):
+        data = make_protocol_client(handler).read_file("readkey123")
+
+    assert data == b"\x00\x01readme"
+    assert captured["path"].startswith("/f/readkey123?expires=1700000300000&signature=")
+    wire_source = f"https://app123.ufs.sh{captured['path']}".split("&signature=")[0]
+    signature = captured["path"].split("&signature=")[1]
+    assert signature == "hmac-sha256%3D" + _sign_url(wire_source, "sk_test_secret").split("=")[1]

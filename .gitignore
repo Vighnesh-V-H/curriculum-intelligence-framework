@@ -11,5 +11,8 @@ __pycache__/
 .next/
 node_modules/
 
+# Runtime uploads (local storage)
+backend/local-storage/
+
 # Tooling
 *.log

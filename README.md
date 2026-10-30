@@ -335,6 +335,18 @@ npm run dev
 The frontend runs at `http://localhost:3000` and signs in against the FastAPI
 API.
 
+### Development servers (Windows)
+
+To stop any previously running dev servers and start both together in separate
+console windows (the backend binds to `127.0.0.1`):
+
+```text
+scripts\dev.bat
+```
+
+The backend and frontend consoles stay open so logs are visible; the frontend
+must be opened via `http://localhost:3000`.
+
 ## Functional Requirements
 
 - **FR1 - Curriculum Ingestion:** Accept authorized curriculum documents and structured data.

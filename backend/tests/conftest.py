@@ -1,24 +1,28 @@
 import os
-import tempfile
 import uuid
 from datetime import timedelta
+from typing import Any
 
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["JWT_SECRET"] = "test-jwt-secret-that-is-at-least-32-characters"
 os.environ["ACCESS_TOKEN_EXPIRE_MINUTES"] = "60"
 os.environ["BOOTSTRAP_ADMIN_PASSWORD"] = ""
-os.environ["UPLOAD_DIR"] = tempfile.mkdtemp(prefix="curriculum-uploads-")
 os.environ["MAX_UPLOAD_SIZE_MB"] = "1"
 os.environ["ALLOWED_UPLOAD_EXTENSIONS"] = '[".pdf", ".docx", ".txt", ".md", ".csv"]'
 os.environ.pop("BOOTSTRAP_ADMIN_USERNAME", None)
 os.environ.pop("BOOTSTRAP_ADMIN_EMAIL", None)
 os.environ.pop("CORS_ORIGINS", None)
 os.environ.pop("LLM_API_KEY", None)
+os.environ.pop("UPLOADTHING_TOKEN", None)
+os.environ.pop("UPLOADTHING_API_KEY", None)
+os.environ.pop("UPLOADTHING_APP_ID", None)
+os.environ.pop("UPLOADTHING_REGION", None)
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from app.api.deps import get_uploadthing_client
 from app.core.security import get_jwt_service, get_password_service
 from app.db.base import Base
 from app.db.models import (
@@ -31,12 +35,51 @@ from app.db.models import (
 )
 from app.db.session import SessionLocal, engine
 from app.main import app
+from app.services.uploadthing import UploadedFile, UploadThingError
+
+
+class SharedStubStorage:
+    def __init__(self) -> None:
+        self.files: dict[str, bytes] = {}
+        self.uploads: list[dict[str, Any]] = []
+        self.counter = 0
+
+    def upload_file(
+        self, data: bytes, filename: str, content_type: str | None = None
+    ) -> UploadedFile:
+        self.counter += 1
+        key = f"ut-key-{self.counter}"
+        self.files[key] = data
+        self.uploads.append(
+            {"data": data, "filename": filename, "content_type": content_type}
+        )
+        return UploadedFile(
+            key=key, ufs_url=f"https://stub-app.ufs.sh/f/{key}", file_hash=None
+        )
+
+    def read_file(self, key: str) -> bytes:
+        try:
+            return self.files[key]
+        except KeyError as exc:
+            raise UploadThingError(f"stored file {key} is missing") from exc
+
+
+shared_stub_storage = SharedStubStorage()
+app.dependency_overrides[get_uploadthing_client] = lambda: shared_stub_storage
+
+
+@pytest.fixture
+def storage_stub() -> SharedStubStorage:
+    return shared_stub_storage
 
 
 @pytest.fixture(autouse=True)
 def clean_database():
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
+    shared_stub_storage.files.clear()
+    shared_stub_storage.uploads.clear()
+    shared_stub_storage.counter = 0
     with SessionLocal() as session:
         for code in RoleCode:
             session.add(
@@ -172,3 +215,4 @@ def expired_token(make_user):
         [RoleCode.FACULTY.value],
         expires_delta=timedelta(seconds=-1),
     )
+

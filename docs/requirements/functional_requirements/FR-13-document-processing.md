@@ -64,17 +64,19 @@ The system shall validate uploads before storage:
 - The stored name shall not expose the original file name
   (path traversal / name spoofing protection).
 
-### FR-13-03: Store Uploaded Document Locally
+### FR-13-03: Store Uploaded Document in Object Storage
 
-The system shall persist the uploaded file in local file system
-storage under a configured upload directory.
+The system shall persist the uploaded file in the configured
+UploadThing storage provider.
 
-Files shall be organized so that a document row can locate its
-stored file unambiguously.
+For each document the system shall record the provider-relative
+file key in `storage_path`; the same row shall be able to locate
+its stored content unambiguously by requesting a signed access
+URL for that key.
 
-Local storage is the storage backend for this increment; moving
-uploads to a cloud object store shall only affect the storage
-layer, not the API contract.
+Using a cloud object store is the storage backend for this
+increment; moving uploads to another storage provider shall only
+affect the storage layer, not the API contract.
 
 ### FR-13-04: Ingest Stored Document
 
@@ -152,7 +154,8 @@ analysis results and update the checksum-verified content status.
 
 - The user is authenticated.
 - The user has the required permission (upload / ingest actions).
-- The upload storage directory is configured and writable.
+- The UploadThing storage provider is configured
+  (misses are reported as a service configuration error).
 - The LLM provider is configured for ingestion (misses are
   reported as a service configuration error).
 
@@ -162,7 +165,7 @@ analysis results and update the checksum-verified content status.
 
 ### On Successful Upload
 
-- The file is stored in local storage.
+- The file is stored in the UploadThing storage provider.
 - A document record with status `UPLOADED` is created.
 - The upload is recorded in the audit history.
 
@@ -257,6 +260,21 @@ A transport or unparsable-response failure marks the document as
 If the stored file cannot be read at ingestion time, the document
 transitions to `FAILED` with the recorded reason.
 
+### EX-DP-09: Storage Provider Not Configured
+
+Upload and ingestion operations end with a service-unavailable
+error indicating the storage provider is not configured. A
+partially configured provider setting (for example a missing
+region when no token is set) behaves like a missing
+configuration.
+
+### EX-DP-10: Storage Provider Failure
+
+A transport failure or rejected upload at the storage provider
+ends the upload request with a bad-gateway error; no document
+record is created. Provider failures during ingestion mark the
+document as `FAILED` (see EX-DP-08).
+
 ---
 
 ## Outcome
@@ -264,10 +282,10 @@ transitions to `FAILED` with the recorded reason.
 Upon successful implementation of this requirement:
 
 - Curriculum documents can be uploaded by authorized users.
-- Uploads are validated and stored in durable local storage.
+- Uploads are validated and stored in durable cloud storage.
 - Documents can be ingested on demand.
 - Text is extracted according to document format.
 - Extracted text is passed to the LLM analysis layer.
 - Analysis output and processing status are stored and visible.
-- Storage can later be replaced by cloud object storage without
-  changing the API contract.
+- Storage can later be exchanged for another cloud provider
+  without changing the API contract.

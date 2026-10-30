@@ -1,5 +1,4 @@
 from functools import lru_cache
-from pathlib import Path
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -20,12 +19,23 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = Field(default=60, gt=0)
     cors_origins: list[str] = ["http://localhost:3000"]
+    cors_allow_origin_regex: str = (
+        r"^https?://(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+"
+        r"|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$"
+    )
     bootstrap_admin_username: str = "admin"
     bootstrap_admin_email: str = "admin@example.com"
     bootstrap_admin_password: SecretStr | None = None
-    upload_dir: Path = Path("local-storage/documents")
     max_upload_size_mb: int = Field(default=20, gt=0)
     allowed_upload_extensions: list[str] = [".pdf", ".docx", ".txt", ".md", ".csv"]
+    uploadthing_token: SecretStr | None = None
+    uploadthing_api_key: SecretStr | None = None
+    uploadthing_app_id: str | None = None
+    uploadthing_region: str | None = None
+    uploadthing_ingest_host: str = "ingest.uploadthing.com"
+    uploadthing_ufs_host: str = "ufs.sh"
+    uploadthing_ufs_app_id_location: str = "subdomain"
+    uploadthing_timeout_seconds: int = Field(default=120, gt=0)
     llm_base_url: str = "https://api.openai.com/v1"
     llm_api_key: SecretStr | None = None
     llm_model: str = "gpt-4o-mini"

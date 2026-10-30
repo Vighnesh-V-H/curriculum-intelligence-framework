@@ -3,15 +3,17 @@
 ## Scope
 
 This document defines the low-level design for FR-13 (Curriculum
-Document Processing): document upload, local-disk storage, text
-extraction, and passing extracted text to the LLM analysis layer.
+Document Processing): document upload, cloud storage via
+UploadThing, text extraction, and passing extracted text to the
+LLM analysis layer.
 
 Neo4j graph projection of the analysis result is out of scope
 (see `database-schema.md` section 7) and will consume the stored
 analysis payload produced here.
 
-Cloud object storage is a future storage-backend swap; the API
-contract does not change (FR-13-03).
+The storage provider is infrastructure detail behind the
+`UploadThingClient` interface; exchanging the provider shall not
+change the API contract (FR-13-03).
 
 ---
 
@@ -31,9 +33,9 @@ db/models/document.py      Document (SQLAlchemy model)
 
 The LLM layer is an infrastructure client injected into the
 service (`services/llm.py`); it contains no curriculum business
-logic. RNG-free filesystem access (save/read of the stored file)
-lives in the service behind small helper methods so a future
-cloud-storage backend can replace it.
+logic. The storage layer is equally external: `services/
+uploadthing.py` implements the UploadThing storage protocol behind
+the `UploadThingClient` interface and is injected the same way.
 
 ---
 
@@ -79,6 +81,8 @@ Error responses use the shared error envelope
 | 409 | `document_processing` | ingestion already running |
 | 413 | `file_too_large` | exceeds `max_upload_size_mb` |
 | 503 | `llm_not_configured` | LLM provider missing during ingest |
+| 503 | `storage_not_configured` | STORAGE provider not configured (upload / ingest) |
+| 502 | `storage_provider_error` | storage provider rejected or failed the upload |
 
 ---
 
@@ -95,7 +99,7 @@ New table `documents` (see migration
 | `content_type` | `VARCHAR(100)` | raw declared content type |
 | `size_bytes` | `BIGINT` NOT NULL | |
 | `checksum_sha256` | `VARCHAR(64)` NOT NULL | |
-| `storage_path` | `VARCHAR(500)` NOT NULL | provider-relative key |
+| `storage_path` | `VARCHAR(500)` NOT NULL | provider-relative key (UploadThing file key) |
 | `status` | `VARCHAR(20)` NOT NULL, CHECK | see FR-13-05 |
 | `extracted_text` | `TEXT` | |
 | `llm_analysis` | `JSONB` | parsed LLM JSON |
@@ -114,31 +118,48 @@ today; no FK to curricula versions until graph projection lands.
 
 ---
 
-## 4. Storage layout (local)
+## 4. Storage layer (UploadThing)
 
-Settings (all consumed by the service through `Settings`):
+Settings (all consumed through `Settings`):
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `UPLOAD_DIR` | `local-storage/documents` | local document root |
+| `UPLOADTHING_TOKEN` | empty | base64 JSON token `{apiKey, appId, regions[]}` from the UploadThing dashboard (preferred) |
+| `UPLOADTHING_API_KEY` / `UPLOADTHING_APP_ID` / `UPLOADTHING_REGION` | empty | alternative to the token for key-based setup; `REGION` required in this mode |
+| `UPLOADTHING_INGEST_HOST` | `ingest.uploadthing.com` | ingest host (token override supported) |
+| `UPLOADTHING_UFS_HOST` | `ufs.sh` | CDN host for signed file access |
+| `UPLOADTHING_UFS_APP_ID_LOCATION` | `subdomain` | `subdomain` or `path` style access URLs |
+| `UPLOADTHING_TIMEOUT_SECONDS` | `120` | provider request timeout |
 | `MAX_UPLOAD_SIZE_MB` | `20` | hard upload ceiling |
 | `ALLOWED_UPLOAD_EXTENSIONS` | `[".pdf", ".docx", ".txt", ".md", ".csv"]` | allow-list |
-| `LLM_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible base |
-| `LLM_API_KEY` | empty | absence = not configured |
-| `LLM_MODEL` | `gpt-4o-mini` | model identifier |
-| `LLM_TIMEOUT_SECONDS` | `120` | request timeout |
 
-Stored path (provider-relative key persisted as `storage_path`):
+`build_uploadthing_client()` resolves credentials (token preferred,
+then the key/app-id/region triple) and returns the client or `None`
+when unconfigured; a partially provided key triple raises
+`storage_not_configured` (EX-DP-09).
 
-```text
-<UPLOAD_DIR>/<uploaded_at:YYYY>/<MM>/<document_id><extension>
-```
+Protocol (mirrors the official `UTApi` server SDK, uploadthing
+v7.x):
 
-- `document_id` is assigned before streaming, so the final name
-  never depends on the user-supplied file name.
-- Content is streamed to `<final>.part` and renamed atomically.
-- `storage_path` intentionally contains no absolute path so the
-  same rows can move to object storage later.
+- **File key** — generated locally: a sha-style key of shuffled
+  sqids alphabet seeded by the app id hash; 12-char app part +
+  36-char file part (`djb2`-style `Hash.string` over UTF-16 code
+  units, truncating JS modulo semantics). No user-supplied name
+  survives into the key.
+- **Upload** — `PUT {region}.ingest.uploadthing.com/{key}` with a
+  locally HMAC-SHA256-signed presigned URL
+  (`expires`, `x-ut-identifier`, `x-ut-file-name`, `x-ut-file-size`,
+  `x-ut-file-type`, `x-ut-content-disposition`, `signature=
+  hmac-sha256=...`), multipart field `file`, and headers
+  `Range: bytes=0-` + `x-uploadthing-version`. The response carries
+  `ufsUrl` / `fileHash`.
+- **Read (ingest)** — GET on the signed access URL
+  `https://{appId}.ufs.sh/f/{key}?expires=...&signature=...`
+  (5-minute TTL), so both public and private files resolve without
+  an API roundtrip.
+- Query values are encoded exactly like JS `URLSearchParams`
+  (space → `+`, `~` → `%7E`, uppercase percent-hex) so the signature
+  covers the exact wire bytes.
 
 Extraction branches on `file_extension`:
 
@@ -193,21 +214,24 @@ and empty arrays where absent.
 ### Upload
 
 ```text
-validate extension/size/empty/signature
-  → stream to <UPLOAD_DIR>/YYYY/MM/<id><ext>.part     (sha256 + byte count)
-  → rename to final name
-  → INSERT documents row (status UPLOADED) + audit log
+validate extension/name/size/empty/signature
+  → buffer bytes (sha256 + byte count, size capped)
+  → PUT to UploadThing ingest presigned URL   (EX-DP-10 → 502)
+     storage unconfigured                     (EX-DP-09 → 503)
+  → INSERT documents row (status UPLOADED, storage_path = file key)
+     + audit log
   → COMMIT → 201 DocumentResponse
 ```
 
-Any refusal happens before the file is persisted and before a row
-is created, so rejected uploads leave no residue.
+Any refusal happens before a UT call and before a row is created,
+so rejected uploads leave no residue.
 
 ### Ingest
 
 ```text
+404 unknown id → storage unconfigured → 503 (EX-DP-09)
 SET status = PROCESSING (IF PROCESSING → 409), audit, COMMIT
-  → read file bytes (EX-DP-08 → FAILED)
+  → download stored bytes via signed URL (EX-DP-08 → FAILED)
   → extract text by extension (EX-DP-05 → FAILED)
   → text.strip() empty → FAILED
   → llm_client.analyze_document(...)
@@ -232,10 +256,13 @@ deployments are introduced.
 Unit / API tests (`tests/test_document_api.py`):
 
 - Faculty upload happy path (`.txt`): 201, metadata, checksum,
-  status UPLOADED, file exists on disk.
+  status UPLOADED, bytes recorded by the stub storage client.
 - Reviewer cannot upload (403); anonymous cannot upload (401).
 - Rejections: empty file, unsupported extension, oversized file,
   PDF signature mismatch (400/413 mapping).
+- Storage unconfigured → upload/ingest return 503
+  `storage_not_configured`; document stays UPLOADED.
+- Storage provider failure → 502 `storage_provider_error`, no row.
 - List + detail endpoints (fields, ordering).
 - Ingest happy path with stub LLM client: text extraction,
   `llm_analysis` persisted, status COMPLETED, model recorded.
@@ -246,5 +273,42 @@ Unit / API tests (`tests/test_document_api.py`):
 - Unknown id ingest → 404.
 - Re-ingest overwrite (BR-DP-06).
 
+Storage-client unit tests (official port parity):
+
+- `effect_hash_string` reference vectors (`"" -> 5381`,
+  `"hello" -> 181380007`, `"world" -> 164394279`).
+- JS `URLSearchParams` encoding vectors (space → `+`,
+  `~` → `%7E`, `%3D` signatures).
+- File key shape (length ≥ 48, sqids alphabet only,
+  deterministic app prefix) and token parsing.
+
 Run with `uv run pytest` and `uv run ruff check .` from
 `backend/`.
+
+---
+
+## 8. Frontend (curriculum UI)
+
+The Next.js client mirrors the API contract:
+
+- `lib/api.ts` — `Document` type plus `uploadDocument`,
+  `listDocuments`, `getDocument`, and `ingestDocument`. The shared
+  `request` wrapper sends the bearer token and must not set
+  `Content-Type` on multipart `FormData` bodies.
+- `app/documents/page.tsx` — document workspace: upload form,
+  document list with status badges, expandable detail panel
+  (metadata, extracted text, parsed AI analysis, error reason),
+  and an `Analyze` action that calls the ingest endpoint.
+- Upload/ingest controls are rendered only for users holding
+  FACULTY, COMMITTEE_MEMBER, or ADMIN roles; REVIEWER sees
+  read-only data. The server remains the authorization source of
+  truth (BR-DP-01).
+- Client-side validation (extension allow-list, empty file, size
+  ceiling) mirrors BR-DP-02/03 for fast feedback; the API rejects
+  invalid uploads regardless.
+- The dashboard workspace grid links to `/documents` as the first
+  available module.
+- Cross-origin uploads from the dev UI are permitted via
+  `CORS_ALLOW_ORIGIN_REGEX`, which by default accepts any
+  `localhost` / `127.0.0.1` / private-range address on any port the
+  Next.js dev server may bind (3000, 3001, or a LAN address).

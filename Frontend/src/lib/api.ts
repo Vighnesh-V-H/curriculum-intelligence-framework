@@ -20,6 +20,25 @@ export type AuthResponse = {
   user: User;
 };
 
+export type DocumentStatus = "UPLOADED" | "PROCESSING" | "COMPLETED" | "FAILED";
+
+export type Document = {
+  id: string;
+  original_filename: string;
+  file_extension: string;
+  content_type: string | null;
+  size_bytes: number;
+  checksum_sha256: string;
+  status: DocumentStatus;
+  llm_model: string | null;
+  extracted_text: string | null;
+  llm_analysis: Record<string, unknown> | null;
+  error_message: string | null;
+  uploaded_by: string;
+  uploaded_at: string;
+  processed_at: string | null;
+};
+
 type ApiErrorBody = {
   error?: {
     code?: string;
@@ -42,7 +61,7 @@ export class ApiError extends Error {
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
 
-  if (init.body && !headers.has("Content-Type")) {
+  if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -53,7 +72,17 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     }
   }
 
-  const response = await fetch(`${API_URL}${path}`, { ...init, headers });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, { ...init, headers });
+  } catch (caught) {
+    const cause = caught instanceof Error ? caught.message : String(caught);
+    throw new ApiError(
+      `Could not reach the backend — ${cause}. Check that the backend is running at ${API_URL}.`,
+      0,
+      "network_error",
+    );
+  }
 
   if (!response.ok) {
     let body: ApiErrorBody = {};
@@ -73,7 +102,17 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     return undefined as T;
   }
 
-  return (await response.json()) as T;
+  let payload: T;
+  try {
+    payload = (await response.json()) as T;
+  } catch {
+    throw new ApiError(
+      "Backend returned an unreadable response body.",
+      response.status,
+      "invalid_response",
+    );
+  }
+  return payload as T;
 }
 
 export const api = {
@@ -99,6 +138,25 @@ export const api = {
   },
   listUsers(): Promise<User[]> {
     return request<User[]>("/api/v1/users");
+  },
+  uploadDocument(file: File): Promise<Document> {
+    const form = new FormData();
+    form.append("file", file);
+    return request<Document>("/api/v1/documents", {
+      method: "POST",
+      body: form,
+    });
+  },
+  listDocuments(): Promise<Document[]> {
+    return request<Document[]>("/api/v1/documents");
+  },
+  getDocument(documentId: string): Promise<Document> {
+    return request<Document>(`/api/v1/documents/${documentId}`);
+  },
+  ingestDocument(documentId: string): Promise<Document> {
+    return request<Document>(`/api/v1/documents/${documentId}/ingest`, {
+      method: "POST",
+    });
   },
 };
 

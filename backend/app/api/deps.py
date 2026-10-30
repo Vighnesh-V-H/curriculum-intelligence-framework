@@ -57,6 +57,7 @@ from app.services.llm import get_llm_client as build_llm_client
 from app.services.mappings import MappingService
 from app.services.outcomes import OutcomeService
 from app.services.prerequisites import PrerequisiteService
+from app.services.uploadthing import UploadThingClient, build_uploadthing_client
 from app.services.users import UserService
 from app.services.verification import VerificationService
 
@@ -312,11 +313,16 @@ def get_llm_client() -> LLMClient:
     return build_llm_client()
 
 
+def get_uploadthing_client() -> UploadThingClient | None:
+    return build_uploadthing_client()
+
+
 def get_document_service(
     session: Session = Depends(get_db),
     documents: DocumentRepository = Depends(get_document_repository),
     audit_logs: AuditLogRepository = Depends(get_audit_log_repository),
     llm_client: LLMClient = Depends(get_llm_client),
+    storage: UploadThingClient | None = Depends(get_uploadthing_client),
 ) -> DocumentProcessingService:
     return DocumentProcessingService(
         session,
@@ -324,6 +330,7 @@ def get_document_service(
         documents,
         audit_logs,
         llm_client,
+        storage,
     )
 
 
