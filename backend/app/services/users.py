@@ -8,7 +8,10 @@ from app.core.security import PasswordService
 from app.db.models.user import Role, RoleCode, User, UserRole, UserStatus
 from app.repositories.roles import RoleRepository
 from app.repositories.users import UserRepository
+from app.schemas.auth import RegisterRequest
 from app.schemas.user import CreateUserRequest, UserResponse
+
+SELF_REGISTRATION_ROLE = RoleCode.FACULTY
 
 
 class UserService:
@@ -23,6 +26,34 @@ class UserService:
         self._users = users
         self._roles = roles
         self._passwords = passwords
+
+    def register_user(self, request: RegisterRequest) -> UserResponse:
+        if self._users.exists_username(request.username):
+            raise ConflictError("Username is already registered", "username_taken")
+        if self._users.exists_email(str(request.email)):
+            raise ConflictError("Email is already registered", "email_taken")
+
+        role_models = self._resolve_roles([SELF_REGISTRATION_ROLE])
+        user = User(
+            username=request.username,
+            email=str(request.email),
+            password_hash=self._passwords.hash(request.password),
+            full_name=request.full_name,
+            status=UserStatus.ACTIVE.value,
+        )
+        try:
+            self._users.add(user)
+            for role in role_models:
+                self._users.add_role_assignment(UserRole(user_id=user.id, role_id=role.id))
+            self._session.commit()
+        except IntegrityError as exc:
+            self._session.rollback()
+            raise ConflictError("Username or email is already registered", "user_conflict") from exc
+
+        created = self._users.get_by_id(user.id)
+        if created is None:
+            raise NotFoundError("User could not be loaded after creation")
+        return UserResponse.from_user(created)
 
     def create_user(self, actor_id: uuid.UUID, request: CreateUserRequest) -> UserResponse:
         if self._users.exists_username(request.username):

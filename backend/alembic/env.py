@@ -27,7 +27,10 @@ class MigrationSettings(BaseSettings):
 
 
 def get_database_url() -> str:
-    return MigrationSettings().database_url
+    database_url = MigrationSettings().database_url
+    if database_url.startswith("postgresql://"):
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    return database_url
 
 
 def run_migrations_offline() -> None:
