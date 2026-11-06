@@ -51,6 +51,7 @@ from app.repositories.verification import (
 from app.services.academic import AcademicService
 from app.services.auth import AuthService
 from app.services.curriculum import CurriculumService
+from app.services.curriculum_draft import CurriculumDraftService
 from app.services.documents import DocumentProcessingService
 from app.services.llm import LLMClient
 from app.services.llm import get_llm_client as build_llm_client
@@ -332,6 +333,12 @@ def get_document_service(
         llm_client,
         storage,
     )
+
+
+def get_curriculum_draft_service(
+    llm_client: LLMClient = Depends(get_llm_client),
+) -> CurriculumDraftService:
+    return CurriculumDraftService(llm_client, get_settings())
 
 
 def get_verification_service(

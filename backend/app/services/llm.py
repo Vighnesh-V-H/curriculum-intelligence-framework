@@ -29,6 +29,44 @@ _SYSTEM_PROMPT = (
     "produce empty lists where the category is absent; do not invent data."
 )
 
+_DRAFT_SYSTEM_PROMPT = (
+    "You are a curriculum drafting assistant for an academic institution. "
+    "You receive the combined text of one or more uploaded curriculum documents "
+    "(syllabi, curriculum outlines, regulations). "
+    "Produce a roadmap-style curriculum draft based on them. "
+    "Respond with a single JSON object and nothing else. Use EXACTLY these keys:\n"
+    "{\n"
+    '  "program": {"name": string|null, "degree": string|null, '
+    '"duration_years": int|null, "summary": string},\n'
+    '  "semesters": [{"semester_number": int, "semester_name": string, '
+    '"focus": string, "courses": [{"code": string, "title": string, '
+    '"credits": int|null, "category": string, "summary": string, '
+    '"outcomes": [{"code": string, "statement": string}]}]}],\n'
+    '  "peos": [{"code": string, "statement": string}],\n'
+    '  "pos": [{"code": string, "statement": string}],\n'
+    '  "mappings": [{"course_code": string, "course_outcome_code": string, '
+    '"program_outcome_code": string, "level": int}]\n'
+    "}\n"
+    "Rules:\n"
+    "- Derive the draft from the provided document text when it is present.\n"
+    "- When the documents are sparse, produce a sensible baseline draft for a "
+    "typical undergraduate program instead of an empty answer.\n"
+    "- Use sequential semester numbers starting at 1 with no gaps.\n"
+    "- Course codes are uppercase alphanumeric identifiers, unique across all "
+    "semesters.\n"
+    "- PEO codes follow the PEO1..PEOn style (2-4 entries); PO codes follow the "
+    "PO1..POn style (4-8 entries).\n"
+    "- Course outcome codes follow the CO1..COn style; every course has 2-3 "
+    "course outcomes.\n"
+    "- Every mapping references codes defined above: course_code and "
+    "course_outcome_code belong to the same course, program_outcome_code comes "
+    "from the pos list, and level is 1, 2 or 3. Provide basic coverage across "
+    "the program.\n"
+    "- Keep summaries short (at most 2 sentences).\n"
+    "- PEOs must never be empty; when the documents define no program outcomes, "
+    "leave pos empty.\n"
+)
+
 
 class LLMNotConfiguredError(ServiceUnavailableError):
     def __init__(self) -> None:
@@ -49,6 +87,8 @@ class LLMClient(Protocol):
     def analyze_document(
         self, document_text: str, original_filename: str
     ) -> dict[str, Any]: ...
+
+    def draft_curriculum(self, document_text: str) -> dict[str, Any]: ...
 
 
 class OpenAICompatibleLLMClient:
@@ -89,6 +129,27 @@ class OpenAICompatibleLLMClient:
                         f"Document content:\n{truncated}"
                     ),
                 },
+            ],
+        }
+        try:
+            content = self._request(payload)
+        except LLMResponseError:
+            raise
+        except Exception as exc:
+            raise LLMResponseError(f"LLM request failed: {exc}") from exc
+        return _parse_json_object(content)
+
+    def draft_curriculum(self, document_text: str) -> dict[str, Any]:
+        if self._api_key is None or self._api_key.get_secret_value() == "":
+            raise LLMNotConfiguredError()
+
+        truncated = document_text[:DOCUMENT_TEXT_MAX_CHARS]
+        payload = {
+            "model": self._model,
+            "temperature": 0,
+            "messages": [
+                {"role": "system", "content": _DRAFT_SYSTEM_PROMPT},
+                {"role": "user", "content": f"Document content:\n{truncated}"},
             ],
         }
         try:
