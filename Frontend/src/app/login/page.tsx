@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { ApiError, api, getStoredToken, storeToken } from "@/lib/api";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -40,10 +41,21 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 px-6 py-16">
-      <section className="w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl shadow-slate-950/40">
+    <main className="auth-shell">
+      <section className="auth-panel">
+        <div className="auth-panel-theme"><ThemeToggle /></div>
+        <div className="auth-aside">
+          <Link href="/" className="brand-mark"><span className="brand-symbol">C</span> Curriculum Intelligence</Link>
+          <div className="auth-aside-copy">
+            <span className="auth-kicker">A clearer view of your curriculum</span>
+            <p>Bring every course, outcome, and document into focus.</p>
+            <div className="auth-illustration"><span>PROGRAM OUTCOMES</span><i /><i /><i /><span>COURSE ALIGNMENT</span></div>
+          </div>
+          <span className="auth-aside-foot">Designed for better learning journeys.</span>
+        </div>
+        <div className="auth-form-wrap">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">
-          Curriculum Intelligence
+          Sign in to your workspace
         </p>
         <h1 className="mt-3 text-2xl font-semibold text-slate-900">Sign in</h1>
         <p className="mt-2 text-sm text-slate-500">
@@ -118,6 +130,7 @@ export default function LoginPage() {
             Create an account
           </Link>
         </p>
+        </div>
       </section>
     </main>
   );

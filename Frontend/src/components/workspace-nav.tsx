@@ -1,0 +1,118 @@
+"use client";
+
+import type { ReactNode } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  BookOpenText,
+  FileStack,
+  LogOut,
+  Sparkles,
+} from "lucide-react";
+
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import type { User } from "@/lib/api";
+import { ThemeToggle } from "@/components/theme-toggle";
+
+const NAV_ITEMS = [
+  { href: "/dashboard", label: "Overview", key: "dashboard", Icon: BookOpenText },
+  { href: "/documents", label: "Documents", key: "documents", Icon: FileStack },
+] as const;
+
+export function WorkspaceNav({
+  active,
+  user,
+  onSignOut,
+  onGenerate,
+  children,
+}: {
+  active: "dashboard" | "documents";
+  user: User;
+  onSignOut: () => void;
+  onGenerate?: () => void;
+  children: ReactNode;
+}) {
+  const pathname = usePathname();
+
+  return (
+    <SidebarProvider className="workspace-provider">
+      <Sidebar collapsible="icon" className="app-sidebar">
+        <SidebarHeader className="workspace-sidebar-header group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-2">
+          <Link className="workspace-brand" href="/dashboard" aria-label="Curriculum Intelligence home">
+            <span className="workspace-brand-mark">C</span>
+            <span className="workspace-brand-copy group-data-[collapsible=icon]:hidden">Curriculum <b>Intelligence</b></span>
+          </Link>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+            <SidebarMenu>
+              {NAV_ITEMS.map(({ href, label, key, Icon }) => (
+                <SidebarMenuItem key={key}>
+                  <SidebarMenuButton
+                    render={<Link href={href} />}
+                    isActive={pathname === href}
+                    tooltip={label}
+                  >
+                    <Icon aria-hidden="true" />
+                    <span className="group-data-[collapsible=icon]:hidden">{label}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
+        </SidebarContent>
+        <SidebarFooter className="workspace-sidebar-footer group-data-[collapsible=icon]:p-2">
+          <div className="sidebar-user group-data-[collapsible=icon]:hidden" title={user.email}>
+            <span className="account-avatar" aria-hidden="true">
+              {user.full_name.trim().charAt(0).toUpperCase()}
+            </span>
+            <span className="sidebar-user-copy">
+              <b>{user.full_name}</b>
+              <small>{user.roles[0]?.replaceAll("_", " ").toLowerCase() ?? "Member"}</small>
+            </span>
+          </div>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton onClick={onSignOut} tooltip="Sign out">
+                <LogOut aria-hidden="true" />
+                <span className="group-data-[collapsible=icon]:hidden">Sign out</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+      </Sidebar>
+      <SidebarInset className="workspace-inset">
+        <header className="workspace-topbar">
+          <div className="topbar-context">
+            <SidebarTrigger className="topbar-sidebar-trigger" />
+            <div className="workspace-crumb"><span>Workspace</span><i>/</i>{active === "dashboard" ? "Overview" : "Documents"}</div>
+          </div>
+          <div className="topbar-actions">
+            <ThemeToggle />
+            {onGenerate ? (
+            <button className="topbar-generate" onClick={onGenerate} type="button">
+              <Sparkles size={16} strokeWidth={1.9} />
+              <span>Generate curriculum</span>
+            </button>
+            ) : null}
+          </div>
+        </header>
+        <div className="workspace-content">{children}</div>
+      </SidebarInset>
+    </SidebarProvider>
+  );
+}

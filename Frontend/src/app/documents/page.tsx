@@ -1,8 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { WorkspaceNav } from "@/components/workspace-nav";
+import { GenerateCurriculumDialog } from "@/components/generate-curriculum-dialog";
 
 import {
   ApiError,
@@ -11,6 +12,7 @@ import {
   User,
   api,
   clearStoredToken,
+  getStoredToken,
 } from "@/lib/api";
 
 const ALLOWED_EXTENSIONS = [".pdf", ".docx", ".txt", ".md", ".csv"];
@@ -76,6 +78,7 @@ export default function DocumentsPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [ingestingId, setIngestingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [generateOpen, setGenerateOpen] = useState(false);
 
   const canWrite = user
     ? user.roles.some((role) => WRITER_ROLES.has(role))
@@ -85,6 +88,10 @@ export default function DocumentsPage() {
     let cancelled = false;
 
     async function loadWorkspace() {
+      if (!getStoredToken()) {
+        router.replace("/login");
+        return;
+      }
       try {
         const [currentUser, docs] = await Promise.all([
           api.me(),
@@ -200,9 +207,18 @@ export default function DocumentsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 px-6 py-10">
+    <WorkspaceNav
+      active="documents"
+      user={user}
+      onSignOut={handleSignOut}
+      onGenerate={canWrite ? () => setGenerateOpen(true) : undefined}
+    >
+      <GenerateCurriculumDialog
+        open={generateOpen}
+        onOpenChange={setGenerateOpen}
+      />
       <div className="mx-auto max-w-5xl">
-        <header className="flex flex-wrap items-start justify-between gap-4">
+        <header className="page-heading flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">
               Curriculum Intelligence
@@ -215,27 +231,13 @@ export default function DocumentsPage() {
               analysis.
             </p>
           </div>
-          <div className="flex gap-2">
-            <Link
-              href="/dashboard"
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
-            >
-              Dashboard
-            </Link>
-            <button
-              onClick={handleSignOut}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400"
-            >
-              Sign out
-            </button>
-          </div>
         </header>
 
         {canWrite ? (
           <section className="mt-8">
             <form
               onSubmit={handleUpload}
-              className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+              className="upload-panel rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
             >
               <h2 className="text-sm font-semibold text-slate-800">
                 Upload a document
@@ -414,6 +416,6 @@ export default function DocumentsPage() {
           )}
         </section>
       </div>
-    </main>
+    </WorkspaceNav>
   );
 }

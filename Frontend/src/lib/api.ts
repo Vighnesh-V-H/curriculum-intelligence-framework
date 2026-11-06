@@ -22,6 +22,49 @@ export type AuthResponse = {
 
 export type DocumentStatus = "UPLOADED" | "PROCESSING" | "COMPLETED" | "FAILED";
 
+export type DraftOutcome = {
+  code: string;
+  statement: string;
+};
+
+export type DraftProgram = {
+  name: string | null;
+  degree: string | null;
+  duration_years: number | null;
+  summary: string;
+};
+
+export type DraftCourse = {
+  code: string;
+  title: string;
+  credits: number | null;
+  category: string;
+  summary: string;
+  outcomes: DraftOutcome[];
+};
+
+export type DraftSemester = {
+  semester_number: number;
+  semester_name: string;
+  focus: string;
+  courses: DraftCourse[];
+};
+
+export type DraftMapping = {
+  course_code: string;
+  course_outcome_code: string;
+  program_outcome_code: string;
+  level: 1 | 2 | 3;
+};
+
+export type CurriculumDraft = {
+  program: DraftProgram;
+  semesters: DraftSemester[];
+  peos: DraftOutcome[];
+  pos: DraftOutcome[];
+  mappings: DraftMapping[];
+};
+
 export type Document = {
   id: string;
   original_filename: string;
@@ -156,6 +199,16 @@ export const api = {
   ingestDocument(documentId: string): Promise<Document> {
     return request<Document>(`/api/v1/documents/${documentId}/ingest`, {
       method: "POST",
+    });
+  },
+  generateCurriculumDraft(files: File[]): Promise<CurriculumDraft> {
+    const form = new FormData();
+    for (const file of files) {
+      form.append("files", file);
+    }
+    return request<CurriculumDraft>("/api/v1/curriculum-drafts", {
+      method: "POST",
+      body: form,
     });
   },
 };

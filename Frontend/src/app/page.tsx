@@ -13,8 +13,9 @@ export default function Home() {
   }, [router]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-300">
-      <p className="text-sm tracking-wide">Loading curriculum workspace…</p>
+    <main className="home-redirect">
+      <span className="workspace-brand-mark" aria-hidden="true">C</span>
+      <p>Opening your curriculum workspace</p>
     </main>
   );
 }
