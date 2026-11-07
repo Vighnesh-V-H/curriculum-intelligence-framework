@@ -1,10 +1,11 @@
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.db.models.verification import (
+    ReviewStatus,
     VerificationFinding,
     VerificationFindingReference,
     VerificationRun,
@@ -39,6 +40,9 @@ class FindingResponse(BaseModel):
     recommendation: str | None
     requires_human_review: bool
     review_status: str
+    reviewed_by: uuid.UUID | None
+    reviewed_at: datetime | None
+    review_comments: str | None
     created_at: datetime
     references: list[FindingReferenceResponse]
 
@@ -56,11 +60,23 @@ class FindingResponse(BaseModel):
             recommendation=finding.recommendation,
             requires_human_review=finding.requires_human_review,
             review_status=finding.review_status,
+            reviewed_by=finding.reviewed_by,
+            reviewed_at=finding.reviewed_at,
+            review_comments=finding.review_comments,
             created_at=finding.created_at,
             references=[
                 FindingReferenceResponse.from_model(reference) for reference in finding.references
             ],
         )
+
+
+class FindingReviewRequest(BaseModel):
+    review_status: Literal[
+        ReviewStatus.ACCEPTED.value,
+        ReviewStatus.REJECTED.value,
+        ReviewStatus.MODIFIED.value,
+    ]
+    review_comments: str | None = Field(default=None, max_length=5000)
 
 
 class VerificationRunResponse(BaseModel):

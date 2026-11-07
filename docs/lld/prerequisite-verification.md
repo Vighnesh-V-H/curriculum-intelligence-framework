@@ -42,6 +42,7 @@ specifies `JSONB` on PostgreSQL.
 | `GET` | `/api/v1/verification-runs/{run_id}` | Authenticated |
 | `GET` | `/api/v1/verification-runs/{run_id}/findings` | Authenticated |
 | `GET` | `/api/v1/verification-findings/{finding_id}` | Authenticated |
+| `PATCH` | `/api/v1/verification-findings/{finding_id}/review` | `ADMIN`, `COMMITTEE_MEMBER`, `REVIEWER` |
 
 The findings list supports `category` and `severity` query filters.
 
@@ -110,5 +111,8 @@ relationships), satisfying BR-PV-07 traceability.
 - Runs and findings are never updated by later curriculum changes;
   re-running creates a new run.
 - Findings default to `review_status=PENDING` for the committee's
-  human review workflow (review acceptance endpoints are part of the
-  future verification-reporting work).
+  human review workflow. Authorized reviewers can set a decision to
+  `ACCEPTED`, `REJECTED`, or `MODIFIED`, optionally add comments, and
+  record their identity and review timestamp. Each decision is audited
+  with its previous and new values. Review decisions do not alter the
+  curriculum or verification run.

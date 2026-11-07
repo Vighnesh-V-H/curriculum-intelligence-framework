@@ -10,6 +10,7 @@ from app.api.deps import (
 from app.db.models.user import RoleCode, User
 from app.schemas.verification import (
     FindingResponse,
+    FindingReviewRequest,
     VerificationRunResponse,
 )
 from app.services.verification import VerificationService
@@ -79,3 +80,17 @@ def get_verification_finding(
     service: VerificationService = Depends(get_verification_service),
 ) -> FindingResponse:
     return service.get_finding(finding_id)
+
+
+@finding_router.patch("/{finding_id}/review", response_model=FindingResponse)
+def review_verification_finding(
+    finding_id: uuid.UUID,
+    payload: FindingReviewRequest,
+    actor: User = Depends(
+        require_roles(RoleCode.ADMIN, RoleCode.COMMITTEE_MEMBER, RoleCode.REVIEWER)
+    ),
+    service: VerificationService = Depends(get_verification_service),
+) -> FindingResponse:
+    return service.review_finding(
+        actor.id, finding_id, payload.review_status, payload.review_comments
+    )

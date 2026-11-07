@@ -259,6 +259,43 @@ class VerificationService:
             raise NotFoundError("Verification finding not found")
         return FindingResponse.from_model(finding)
 
+    def review_finding(
+        self,
+        actor_id: uuid.UUID,
+        finding_id: uuid.UUID,
+        review_status: str,
+        review_comments: str | None,
+    ) -> FindingResponse:
+        finding = self._findings.get_by_id(finding_id)
+        if finding is None:
+            raise NotFoundError("Verification finding not found")
+
+        old_values = {
+            "review_status": finding.review_status,
+            "review_comments": finding.review_comments,
+            "reviewed_by": str(finding.reviewed_by) if finding.reviewed_by else None,
+        }
+        finding.review_status = review_status
+        finding.reviewed_by = actor_id
+        finding.reviewed_at = utc_now()
+        finding.review_comments = review_comments
+        self._audit(
+            actor_id,
+            "verification_finding",
+            finding.id,
+            "REVIEW",
+            curriculum_version_id=finding.verification_run.curriculum_version_id,
+            old_values=old_values,
+            new_values={
+                "review_status": finding.review_status,
+                "review_comments": finding.review_comments,
+                "reviewed_by": str(actor_id),
+            },
+        )
+        self._session.commit()
+        self._session.refresh(finding)
+        return FindingResponse.from_model(finding)
+
     def _analyze_version(self, version_id: uuid.UUID) -> list[_FindingDraft]:
         courses = {
             course.id: course
