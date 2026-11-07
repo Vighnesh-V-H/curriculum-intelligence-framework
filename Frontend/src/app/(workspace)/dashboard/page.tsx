@@ -97,9 +97,9 @@ export default function DashboardPage() {
             course outcomes, and proposed mappings in one place.
           </p>
           {canDraft ? (
-            <Link className="dashboard-draft-entry__action" href="/curriculum-drafts/new">
+            <Link className="dashboard-draft-entry__action text-gray-300" href="/curriculum-drafts/new">
               Open draft studio
-              <ArrowRight aria-hidden="true" />
+              <ArrowRight aria-hidden="true" className="text-gray-300"/>
             </Link>
           ) : (
             <p className="dashboard-draft-entry__access-note">Your role does not include curriculum draft generation.</p>

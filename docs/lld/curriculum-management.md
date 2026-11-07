@@ -95,6 +95,17 @@ outcome must have at least one valid CO-PO mapping. Invalid or incomplete LLM
 output is reported as `503 llm_draft_failed` rather than as a client request
 error.
 
+## Frontend test workspace
+
+The authenticated `/curricula` page provides an operator-facing interface for
+creating curricula from existing programs, adding departments/programs when the
+account has the required role, selecting versions, managing courses and course
+outcomes, creating/reviewing program outcomes and CO–PO mappings, proposing and
+reviewing prerequisites, changing version status, and comparing versions.
+Actions are shown according to the current user's role and draft state; the API
+remains authoritative for authorization and transition validation. AI-generated
+draft output remains a preview and is not saved by this page.
+
 ## Audit Trail
 
 Curriculum, version, and course writes append to `audit_logs` with the

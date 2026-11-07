@@ -35,13 +35,72 @@ export type Curriculum = {
   latest_version: { id: string; version_label: string; status: string } | null;
 };
 
+export type Department = { id: string; code: string; name: string };
+
+export type Program = {
+  id: string;
+  department_id: string;
+  code: string;
+  name: string;
+  degree_type: string | null;
+  duration_years: number;
+};
+
+export type CourseType = { code: string; name: string };
+
 export type CurriculumVersion = {
   id: string;
   curriculum_id: string;
   version_label: string;
   status: string;
   semesters: { id: string; semester_number: number; name: string | null }[];
-  courses: { id: string; course_code: string; course_name: string }[];
+  courses: Course[];
+};
+
+export type Course = {
+  id: string;
+  curriculum_version_id: string;
+  course_code: string;
+  course_name: string;
+  course_type_code: string;
+  course_type_name: string;
+  credits: number;
+  semester_number: number;
+  contact_hours: number | null;
+  description: string | null;
+  syllabus: string | null;
+  status: string;
+};
+
+export type CourseOutcome = { id: string; course_id: string; co_code: string; description: string; status: string };
+export type Outcome = {
+  id: string;
+  program_id: string;
+  po_code?: string;
+  peo_code?: string;
+  status: string;
+  current_version: { id: string; version_number: number; description: string; status: string } | null;
+  versions: { id: string; version_number: number; description: string; status: string; review_comments: string | null }[];
+};
+export type MappingLevel = { code: string; name: string; numeric_value: number; description: string | null };
+export type Mapping = {
+  id: string;
+  course_outcome_id: string;
+  program_outcome_id: string;
+  course_code: string;
+  co_code: string;
+  po_code: string;
+  status: string;
+  current_version: { id: string; mapping_level_code: string; mapping_level_name: string; numeric_value: number; status: string; review_comments: string | null } | null;
+};
+export type Prerequisite = {
+  id: string;
+  prerequisite_course_id: string;
+  prerequisite_course_code: string;
+  target_course_id: string;
+  target_course_code: string;
+  status: string;
+  review_comments: string | null;
 };
 
 export type VerificationRun = {
@@ -234,8 +293,97 @@ export const api = {
   listCurricula(): Promise<Curriculum[]> {
     return request<Curriculum[]>("/api/v1/curricula");
   },
+  listPrograms(): Promise<Program[]> {
+    return request<Program[]>("/api/v1/programs");
+  },
+  listDepartments(): Promise<Department[]> {
+    return request<Department[]>("/api/v1/departments");
+  },
+  createDepartment(payload: { code: string; name: string }): Promise<Department> {
+    return request("/api/v1/departments", { method: "POST", body: JSON.stringify(payload) });
+  },
+  createProgram(payload: { department_id: string; code: string; name: string; degree_type?: string; duration_years: number }): Promise<Program> {
+    return request("/api/v1/programs", { method: "POST", body: JSON.stringify(payload) });
+  },
+  getCurriculum(id: string): Promise<Curriculum & { versions: CurriculumVersion[] }> {
+    return request(`/api/v1/curricula/${id}`);
+  },
+  listCourseTypes(): Promise<CourseType[]> {
+    return request<{ code: string; name: string }[]>("/api/v1/course-types");
+  },
+  createCurriculum(payload: Record<string, unknown>): Promise<Curriculum> {
+    return request<Curriculum>("/api/v1/curricula", { method: "POST", body: JSON.stringify(payload) });
+  },
+  updateCurriculum(id: string, payload: Record<string, unknown>): Promise<Curriculum> {
+    return request<Curriculum>(`/api/v1/curricula/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+  },
   getCurriculumVersions(curriculumId: string): Promise<CurriculumVersion[]> {
     return request<CurriculumVersion[]>(`/api/v1/curricula/${curriculumId}/versions`);
+  },
+  createCurriculumVersion(curriculumId: string, payload: { version_label?: string; change_summary?: string }): Promise<CurriculumVersion> {
+    return request<CurriculumVersion>(`/api/v1/curricula/${curriculumId}/versions`, { method: "POST", body: JSON.stringify(payload) });
+  },
+  updateCurriculumVersionStatus(curriculumId: string, versionId: string, status: string): Promise<CurriculumVersion> {
+    return request<CurriculumVersion>(`/api/v1/curricula/${curriculumId}/versions/${versionId}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
+  },
+  compareCurriculumVersions(curriculumId: string, baseId: string, targetId: string): Promise<{ added_courses: Course[]; removed_courses: Course[]; modified_courses: { course_code: string; changes: Record<string, { before: unknown; after: unknown }> }[] }> {
+    const params = new URLSearchParams({ base_version_id: baseId, target_version_id: targetId });
+    return request(`/api/v1/curricula/${curriculumId}/compare?${params}`);
+  },
+  createCourse(curriculumId: string, versionId: string, payload: Record<string, unknown>): Promise<Course> {
+    return request(`/api/v1/curricula/${curriculumId}/versions/${versionId}/courses`, { method: "POST", body: JSON.stringify(payload) });
+  },
+  updateCourse(curriculumId: string, versionId: string, courseId: string, payload: Record<string, unknown>): Promise<Course> {
+    return request(`/api/v1/curricula/${curriculumId}/versions/${versionId}/courses/${courseId}`, { method: "PATCH", body: JSON.stringify(payload) });
+  },
+  removeCourse(curriculumId: string, versionId: string, courseId: string): Promise<void> {
+    return request(`/api/v1/curricula/${curriculumId}/versions/${versionId}/courses/${courseId}`, { method: "DELETE" });
+  },
+  listCourseOutcomes(curriculumId: string, versionId: string, courseId: string): Promise<CourseOutcome[]> {
+    return request(`/api/v1/curricula/${curriculumId}/versions/${versionId}/courses/${courseId}/outcomes`);
+  },
+  createCourseOutcome(curriculumId: string, versionId: string, courseId: string, payload: { co_code: string; description: string }): Promise<CourseOutcome> {
+    return request(`/api/v1/curricula/${curriculumId}/versions/${versionId}/courses/${courseId}/outcomes`, { method: "POST", body: JSON.stringify(payload) });
+  },
+  reviewPrerequisite(curriculumId: string, versionId: string, prerequisiteId: string, status: "APPROVED" | "REJECTED", review_comments?: string): Promise<Prerequisite> {
+    return request(`/api/v1/curricula/${curriculumId}/versions/${versionId}/prerequisites/${prerequisiteId}/status`, { method: "PATCH", body: JSON.stringify({ status, review_comments }) });
+  },
+  listProgramOutcomes(programId: string): Promise<Outcome[]> {
+    return request(`/api/v1/programs/${programId}/program-outcomes`);
+  },
+  createProgramOutcome(programId: string, payload: { po_code: string; description: string }): Promise<Outcome> {
+    return request(`/api/v1/programs/${programId}/program-outcomes`, { method: "POST", body: JSON.stringify(payload) });
+  },
+  listPeos(programId: string): Promise<Outcome[]> {
+    return request(`/api/v1/programs/${programId}/peos`);
+  },
+  createPeo(programId: string, payload: { peo_code: string; description: string }): Promise<Outcome> {
+    return request(`/api/v1/programs/${programId}/peos`, { method: "POST", body: JSON.stringify(payload) });
+  },
+  updateOutcomeVersionStatus(kind: "po" | "peo", outcomeId: string, versionId: string, status: string, review_comments?: string): Promise<unknown> {
+    const base = kind === "po" ? "program-outcomes" : "peos";
+    return request(`/api/v1/${base}/${outcomeId}/versions/${versionId}/status`, { method: "PATCH", body: JSON.stringify({ status, review_comments }) });
+  },
+  listMappingLevels(): Promise<MappingLevel[]> {
+    return request("/api/v1/mapping-levels");
+  },
+  listMappings(curriculumId: string, versionId: string): Promise<Mapping[]> {
+    return request(`/api/v1/curricula/${curriculumId}/versions/${versionId}/mappings`);
+  },
+  createMapping(curriculumId: string, versionId: string, payload: { course_outcome_id: string; program_outcome_id: string; mapping_level_code: string }): Promise<Mapping> {
+    return request(`/api/v1/curricula/${curriculumId}/versions/${versionId}/mappings`, { method: "POST", body: JSON.stringify(payload) });
+  },
+  updateMappingVersionStatus(mappingId: string, versionId: string, status: string, review_comments?: string): Promise<Mapping> {
+    return request(`/api/v1/mappings/${mappingId}/versions/${versionId}/status`, { method: "PATCH", body: JSON.stringify({ status, review_comments }) });
+  },
+  removeMapping(mappingId: string): Promise<void> {
+    return request(`/api/v1/mappings/${mappingId}`, { method: "DELETE" });
+  },
+  listPrerequisites(curriculumId: string, versionId: string): Promise<Prerequisite[]> {
+    return request(`/api/v1/curricula/${curriculumId}/versions/${versionId}/prerequisites`);
+  },
+  createPrerequisite(curriculumId: string, versionId: string, payload: { prerequisite_course_id: string; target_course_id: string }): Promise<Prerequisite> {
+    return request(`/api/v1/curricula/${curriculumId}/versions/${versionId}/prerequisites`, { method: "POST", body: JSON.stringify(payload) });
   },
   listVerificationRuns(curriculumId: string, versionId: string): Promise<VerificationRun[]> {
     return request<VerificationRun[]>(

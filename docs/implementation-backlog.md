@@ -38,13 +38,13 @@ This file tracks work still needed to complete the Curriculum Intelligence and V
 ## Frontend
 
 ### 1. Curriculum management
-- Build UI workflows to create and edit curricula and versions.
-- Support listing and managing courses, course outcomes, semester allocation, and curriculum version comparisons.
-- Respect backend authorization and version-state rules; the frontend must not be the authority for access control.
+- [x] Add a test workspace for curriculum creation, course/course-outcome management, version status, and comparisons.
+- [ ] Complete curriculum metadata editing and expose all course-outcome update/remove operations.
+- [ ] Respect backend authorization and version-state rules; the frontend must not be the authority for access control (API enforcement remains authoritative).
 
 ### 2. Outcomes and mappings
-- Build UI for managing and reviewing Program Outcomes and Program Educational Objectives.
-- Build UI for Course Outcome–Program Outcome mappings, including mapping levels and version/review status.
+- [x] Add UI to create POs/PEOs, advance outcome versions through review, and create/review CO–PO mappings.
+- [ ] Add outcome metadata/status editing and mapping-level update/removal controls.
 
 ### 3. Verification experience
 - Build a verification-run workflow and display run status and summaries.
@@ -69,4 +69,4 @@ This file tracks work still needed to complete the Curriculum Intelligence and V
 
 ## Current baseline
 
-The repository already has authentication, relational curriculum/version management, course outcomes, Program Outcome/PEO and CO–PO management, prerequisite management and prerequisite verification, document upload/LLM processing, and AI-assisted curriculum draft generation. The frontend currently provides authentication/workspace pages plus document and draft-generation pages. This backlog lists the main remaining work rather than repeating implemented capabilities.
+The repository already has authentication, relational curriculum/version management, course outcomes, Program Outcome/PEO and CO–PO management, prerequisite management and prerequisite verification, document upload/LLM processing, and AI-assisted curriculum draft generation. The frontend now includes authentication, documents, draft generation, verification review, and an initial curriculum/outcomes/mappings/prerequisites workspace. The workspace enables interactive testing of common backend paths but does not yet cover every backend operation. This backlog lists remaining work.

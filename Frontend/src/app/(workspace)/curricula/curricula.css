@@ -1,0 +1,60 @@
+.academic-page { width: min(100%, 1320px); margin: 0 auto; color: var(--foreground); }
+.academic-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin: 4px 0 27px; }
+.academic-heading h1 { margin: 5px 0 8px; font: 400 clamp(34px, 4vw, 48px)/1.05 Georgia, "Times New Roman", serif; letter-spacing: -.04em; }
+.academic-heading p { margin: 0; color: var(--primary); font-size: 11px; font-weight: 600; }
+.academic-heading span { color: var(--muted-foreground); font-size: 13px; }
+.academic-picker, .academic-summary label { display: grid; gap: 6px; min-width: 210px; color: var(--muted-foreground); font-size: 11px; }
+.academic-heading-actions { display: flex; align-items: end; gap: 10px; }
+.academic-heading-actions > button { min-height: 38px; white-space: nowrap; }
+.academic-page input, .academic-page select, .academic-page textarea { min-width: 0; min-height: 38px; padding: 8px 10px; border: 1px solid var(--input); border-radius: 5px; color: var(--foreground); background: var(--card); font: inherit; font-size: 12px; }
+.academic-page textarea { resize: vertical; }
+.academic-page button { min-height: 36px; padding: 0 12px; border: 1px solid var(--primary); border-radius: 5px; color: var(--primary-foreground); background: var(--primary); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+.academic-page button:disabled { cursor: not-allowed; opacity: .55; }
+.academic-page button.academic-danger { border-color: color-mix(in srgb, var(--destructive), var(--border) 55%); color: var(--destructive); background: transparent; }
+.academic-alert { margin: 12px 0; padding: 11px 13px; border: 1px solid color-mix(in srgb, var(--success), var(--border) 55%); border-radius: 5px; color: var(--foreground); background: color-mix(in srgb, var(--success), var(--card) 92%); font-size: 12px; }
+.academic-alert--error { border-color: color-mix(in srgb, var(--destructive), var(--border) 55%); background: color-mix(in srgb, var(--destructive), var(--card) 93%); }
+.academic-panel { min-width: 0; padding: clamp(17px, 2.5vw, 25px); border: 1px solid var(--border); border-radius: 7px; background: var(--card); }
+.academic-panel h2 { margin: 0 0 15px; font: 400 21px/1.2 Georgia, "Times New Roman", serif; }
+.academic-panel > p { color: var(--muted-foreground); font-size: 12px; }
+.academic-create-form { margin-bottom: 20px; }
+.academic-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 13px; margin: 14px 0; }
+.academic-fields--one { grid-template-columns: 1fr; }
+.academic-fields label, .academic-inline-form label { display: grid; gap: 5px; color: var(--muted-foreground); font-size: 11px; }
+.academic-panel > button, .academic-create-form > button { margin-top: 8px; }
+.academic-create-form > small { margin-left: 12px; color: var(--muted-foreground); }
+.academic-summary { display: grid; grid-template-columns: 1fr 1fr 1fr minmax(190px, .8fr); align-items: center; gap: 16px; margin: 19px 0; padding: 16px 18px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); }
+.academic-summary div { display: grid; gap: 6px; }
+.academic-summary small { color: var(--muted-foreground); font-size: 10px; }
+.academic-summary strong { font-size: 12px; font-weight: 550; }
+.academic-summary label { min-width: 0; }
+.academic-tabs { display: flex; gap: 20px; margin-bottom: 16px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.academic-tabs button { min-height: 42px; flex: 0 0 auto; padding: 0 2px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: var(--muted-foreground); background: transparent; font-size: 12px; }
+.academic-tabs button.is-active { border-bottom-color: var(--primary); color: var(--foreground); }
+.academic-workspace { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(260px, .7fr); align-items: start; gap: 15px; }
+.academic-list { display: grid; }
+.academic-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 14px 0; border-top: 1px solid var(--border); }
+.academic-row > div:first-child { min-width: 0; }
+.academic-row strong { font-size: 12px; font-weight: 550; line-height: 1.5; }
+.academic-row p { margin: 4px 0; color: var(--muted-foreground); font-size: 11px; }
+.academic-row small { color: var(--muted-foreground); font-size: 10px; line-height: 1.5; }
+.academic-empty { padding: 12px 0; color: var(--muted-foreground); font-size: 12px; }
+.academic-readonly { padding: 10px 12px; border-left: 2px solid var(--warning); color: var(--muted-foreground); background: color-mix(in srgb, var(--warning), var(--card) 94%); font-size: 11px; }
+.academic-course-actions { display: grid; gap: 8px; justify-items: end; flex: 0 0 auto; }
+.academic-edit-course { width: 100%; min-width: 220px; padding: 7px; border: 1px solid var(--border); border-radius: 5px; }
+.academic-edit-course summary { color: var(--primary); font-size: 10px; cursor: pointer; }
+.academic-edit-course form { display: grid; gap: 7px; margin-top: 9px; }
+.academic-edit-course label { display: grid; gap: 4px; color: var(--muted-foreground); font-size: 10px; }
+.academic-edit-course input, .academic-edit-course select, .academic-edit-course textarea { min-height: 31px; padding: 5px; font-size: 10px; }
+.academic-bootstrap { margin: 16px 0; }
+.academic-co-form { display: grid; grid-template-columns: 75px minmax(130px, 1fr) auto; gap: 5px; }
+.academic-co-form input { min-height: 31px; padding: 5px 7px; font-size: 10px; }
+.academic-co-form button { min-height: 31px; padding: 0 8px; font-size: 10px; }
+.co-list { display: grid; gap: 4px; margin-top: 8px; }
+.co-list span { color: var(--muted-foreground); font-size: 10px; line-height: 1.5; }
+.co-list b { color: var(--primary); }
+.academic-outcomes { margin-top: 20px; }
+.academic-outcomes h3, .academic-inline-form h3 { margin: 0 0 8px; font-size: 12px; font-weight: 600; }
+.academic-inline-form { display: grid; gap: 10px; padding: 14px 0; border-top: 1px solid var(--border); }
+.academic-actions { display: flex; gap: 7px; }
+@media (max-width: 850px) { .academic-workspace { grid-template-columns: 1fr; } .academic-summary { grid-template-columns: repeat(2, minmax(0,1fr)); } .academic-fields { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+@media (max-width: 560px) { .academic-heading { align-items: stretch; flex-direction: column; } .academic-heading-actions { align-items: stretch; flex-direction: column; } .academic-picker { min-width: 0; } .academic-fields, .academic-summary { grid-template-columns: 1fr; } .academic-row { flex-direction: column; } .academic-course-actions { width: 100%; justify-items: stretch; } .academic-co-form { grid-template-columns: 68px minmax(0, 1fr); } .academic-co-form button { grid-column: 1 / -1; } }
