@@ -6,6 +6,7 @@ import {
   BookOpenText,
   FileStack,
   LogOut,
+  SearchCheck,
   Sparkles,
 } from "lucide-react";
 
@@ -29,6 +30,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Overview", key: "dashboard", Icon: BookOpenText },
   { href: "/documents", label: "Documents", key: "documents", Icon: FileStack },
+  { href: "/verification", label: "Verification", key: "verification", Icon: SearchCheck },
 ] as const;
 
 export function WorkspaceNav({
@@ -38,7 +40,7 @@ export function WorkspaceNav({
   onGenerate,
   children,
 }: {
-  active: "dashboard" | "documents" | "drafts";
+  active: "dashboard" | "documents" | "drafts" | "verification";
   user: User;
   onSignOut: () => void;
   onGenerate?: () => void;
@@ -102,7 +104,7 @@ export function WorkspaceNav({
         <header className="workspace-topbar">
           <div className="topbar-context">
             <SidebarTrigger className="topbar-sidebar-trigger" />
-            <div className="workspace-crumb"><span>Workspace</span><i>/</i>{active === "dashboard" ? "Overview" : active === "documents" ? "Documents" : "Draft studio"}</div>
+            <div className="workspace-crumb"><span>Workspace</span><i>/</i>{active === "dashboard" ? "Overview" : active === "documents" ? "Documents" : active === "verification" ? "Verification" : "Draft studio"}</div>
           </div>
           <div className="topbar-actions">
             <ThemeToggle />

@@ -49,7 +49,7 @@ This file tracks work still needed to complete the Curriculum Intelligence and V
 ### 3. Verification experience
 - Build a verification-run workflow and display run status and summaries.
 - Display findings with category, severity, confidence, evidence, related curriculum entities, and recommendations.
-- Add authorized finding review actions and show review history/status.
+- [x] Add authorized finding review actions and show the current review status/comment.
 - Provide a readable report view with filtering and grouping.
 
 ### 4. Curriculum exploration

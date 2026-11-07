@@ -22,6 +22,55 @@ export type AuthResponse = {
 
 export type DocumentStatus = "UPLOADED" | "PROCESSING" | "COMPLETED" | "FAILED";
 
+export type Curriculum = {
+  id: string;
+  program_id: string;
+  program_code: string;
+  program_name: string;
+  academic_year: string;
+  regulation: string;
+  title: string | null;
+  duration_years: number;
+  status: string;
+  latest_version: { id: string; version_label: string; status: string } | null;
+};
+
+export type CurriculumVersion = {
+  id: string;
+  curriculum_id: string;
+  version_label: string;
+  status: string;
+  semesters: { id: string; semester_number: number; name: string | null }[];
+  courses: { id: string; course_code: string; course_name: string }[];
+};
+
+export type VerificationRun = {
+  id: string;
+  curriculum_version_id: string;
+  status: string;
+  requested_at: string;
+  completed_at: string | null;
+  summary: { result?: string; total_findings?: number; findings_by_severity?: Record<string, number> } | null;
+};
+
+export type VerificationFinding = {
+  id: string;
+  verification_run_id: string;
+  category: string;
+  severity: string;
+  confidence: number | null;
+  title: string;
+  description: string | null;
+  evidence: string | null;
+  recommendation: string | null;
+  requires_human_review: boolean;
+  review_status: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_comments: string | null;
+  references: { id: string; entity_type: string; entity_id: string; note: string | null }[];
+};
+
 export type DraftOutcome = {
   code: string;
   statement: string;
@@ -181,6 +230,36 @@ export const api = {
   },
   listUsers(): Promise<User[]> {
     return request<User[]>("/api/v1/users");
+  },
+  listCurricula(): Promise<Curriculum[]> {
+    return request<Curriculum[]>("/api/v1/curricula");
+  },
+  getCurriculumVersions(curriculumId: string): Promise<CurriculumVersion[]> {
+    return request<CurriculumVersion[]>(`/api/v1/curricula/${curriculumId}/versions`);
+  },
+  listVerificationRuns(curriculumId: string, versionId: string): Promise<VerificationRun[]> {
+    return request<VerificationRun[]>(
+      `/api/v1/curricula/${curriculumId}/versions/${versionId}/verification-runs`,
+    );
+  },
+  startVerification(curriculumId: string, versionId: string): Promise<VerificationRun> {
+    return request<VerificationRun>(
+      `/api/v1/curricula/${curriculumId}/versions/${versionId}/verification-runs`,
+      { method: "POST" },
+    );
+  },
+  listVerificationFindings(runId: string): Promise<VerificationFinding[]> {
+    return request<VerificationFinding[]>(`/api/v1/verification-runs/${runId}/findings`);
+  },
+  reviewVerificationFinding(
+    findingId: string,
+    reviewStatus: "ACCEPTED" | "REJECTED" | "MODIFIED",
+    reviewComments: string,
+  ): Promise<VerificationFinding> {
+    return request<VerificationFinding>(`/api/v1/verification-findings/${findingId}/review`, {
+      method: "PATCH",
+      body: JSON.stringify({ review_status: reviewStatus, review_comments: reviewComments || null }),
+    });
   },
   uploadDocument(file: File): Promise<Document> {
     const form = new FormData();

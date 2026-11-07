@@ -18,6 +18,7 @@ The app runs at `http://localhost:3000` and calls the FastAPI backend at
 
 - `/login` — sign in with username or email and a password.
 - `/dashboard` — displays the authenticated user, roles, and account status.
+- `/verification` — run prerequisite checks, inspect findings, and record authorized review decisions.
 
 Authentication uses the backend-issued JWT stored in `localStorage`. All
 authorization decisions are enforced by the FastAPI API; the frontend only
