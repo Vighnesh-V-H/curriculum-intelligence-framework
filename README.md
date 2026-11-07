@@ -321,7 +321,10 @@ uv run uvicorn app.main:app --reload
 The API is available at `http://localhost:8000`, with interactive
 documentation at `http://localhost:8000/docs`. When
 `BOOTSTRAP_ADMIN_PASSWORD` is set, the first start creates an administrator
-account if it does not already exist.
+account if it does not already exist. Backend logs are structured JSON on stdout;
+set `LOG_LEVEL` (`DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`) to adjust
+verbosity. See [Backend Logging LLD](docs/lld/backend-logging.md) for the event
+and privacy policy.
 
 ### Frontend
 
@@ -339,6 +342,9 @@ API.
 
 To stop any previously running dev servers and start both together in separate
 console windows (the backend binds to `127.0.0.1`):
+
+The script uses port `8000` when available; if a stale listener holds it, it
+selects the next available port and configures the frontend to call that API.
 
 ```text
 scripts\dev.bat

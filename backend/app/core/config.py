@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     app_name: str = "Curriculum Intelligence API"
     environment: str = "local"
+    log_level: str = "INFO"
     api_v1_prefix: str = "/api/v1"
     database_url: str
     jwt_secret: SecretStr
@@ -40,6 +41,14 @@ class Settings(BaseSettings):
     llm_api_key: SecretStr | None = None
     llm_model: str = "gpt-4o-mini"
     llm_timeout_seconds: int = Field(default=120, gt=0)
+
+    @field_validator("log_level")
+    @classmethod
+    def validate_log_level(cls, value: str) -> str:
+        normalized = value.upper()
+        if normalized not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
+            raise ValueError("LOG_LEVEL must be DEBUG, INFO, WARNING, ERROR, or CRITICAL")
+        return normalized
 
     @field_validator("jwt_secret")
     @classmethod

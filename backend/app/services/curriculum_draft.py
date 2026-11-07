@@ -1,4 +1,5 @@
 import io
+import logging
 from pathlib import Path
 
 from fastapi import UploadFile
@@ -24,6 +25,8 @@ from app.services.llm import (
     LLMResponseError,
 )
 
+logger = logging.getLogger(__name__)
+
 _CHUNK_SIZE = 1024 * 1024
 _MAX_FILES = 5
 
@@ -34,6 +37,10 @@ class CurriculumDraftService:
         self._settings = settings
 
     def generate(self, actor: User, files: list[UploadFile]) -> CurriculumDraftResponse:
+        logger.info(
+            "Curriculum draft generation started",
+            extra={"actor_id": str(actor.id), "file_count": len(files)},
+        )
         if not 1 <= len(files) <= _MAX_FILES:
             raise BadRequestError(
                 f"Upload between 1 and {_MAX_FILES} files per request",
@@ -51,15 +58,65 @@ class CurriculumDraftService:
         combined = "\n\n".join(
             f"= File: {name} =\n{text}" for name, text in sources
         )[:DOCUMENT_TEXT_MAX_CHARS]
+        logger.info(
+            "Curriculum source text extracted",
+            extra={
+                "actor_id": str(actor.id),
+                "file_count": len(sources),
+                "text_chars": len(combined),
+            },
+        )
         try:
             payload = self._llm_client.draft_curriculum(combined)
         except LLMNotConfiguredError:
+            logger.warning(
+                "Curriculum draft generation unavailable: LLM is not configured",
+                extra={"actor_id": str(actor.id), "operation": "draft"},
+            )
             raise
         except LLMResponseError as exc:
+            logger.error(
+                "Curriculum draft provider request failed",
+                extra={
+                    "actor_id": str(actor.id),
+                    "operation": "draft",
+                    "model": self._llm_client.model,
+                    "exception_type": type(exc).__name__,
+                },
+            )
             raise ServiceUnavailableError(
                 f"LLM drafting failed: {exc}", "llm_draft_failed"
             ) from exc
-        return CurriculumDraftResponse.from_llm_payload(payload)
+        try:
+            draft = CurriculumDraftResponse.from_llm_payload(payload)
+        except BadRequestError as exc:
+            logger.error(
+                "Curriculum draft response failed validation",
+                extra={
+                    "actor_id": str(actor.id),
+                    "operation": "draft",
+                    "model": self._llm_client.model,
+                    "exception_type": type(exc).__name__,
+                },
+            )
+            raise ServiceUnavailableError(
+                f"LLM returned an incomplete or invalid curriculum draft: {exc.message}",
+                "llm_draft_failed",
+            ) from exc
+        logger.info(
+            "Curriculum draft generation completed",
+            extra={
+                "actor_id": str(actor.id),
+                "operation": "draft",
+                "model": self._llm_client.model,
+                "semester_count": len(draft.semesters),
+                "course_count": sum(len(semester.courses) for semester in draft.semesters),
+                "peo_count": len(draft.peos),
+                "po_count": len(draft.pos),
+                "mapping_count": len(draft.mappings),
+            },
+        )
+        return draft
 
     def _read_source(self, uploaded_file: UploadFile) -> tuple[str, str]:
         extension = normalize_extension(uploaded_file.filename)

@@ -50,11 +50,14 @@ class CurriculumDraftResponse(BaseModel):
     program: DraftProgram
     semesters: list[DraftSemester]
     peos: list[DraftOutcomeDefinition] = Field(min_length=1)
-    pos: list[DraftOutcomeDefinition]
-    mappings: list[DraftMapping]
+    pos: list[DraftOutcomeDefinition] = Field(min_length=1)
+    mappings: list[DraftMapping] = Field(min_length=1)
 
     @model_validator(mode="after")
     def validate_consistency(self) -> "CurriculumDraftResponse":
+        if not self.semesters:
+            raise ValueError("At least one semester is required")
+
         semester_numbers = [semester.semester_number for semester in self.semesters]
         if semester_numbers != list(range(1, len(semester_numbers) + 1)):
             raise ValueError(
@@ -83,12 +86,16 @@ class CurriculumDraftResponse(BaseModel):
                     )
                 course_outcomes[course_key] = outcome_codes
 
+        if not course_outcomes:
+            raise ValueError("At least one course with course outcomes is required")
+
         for label, definitions in (("PEO", self.peos), ("PO", self.pos)):
             codes = [_normalize_code(definition.code) for definition in definitions]
             if len(set(codes)) != len(codes):
                 raise ValueError(f"{label} codes must be unique")
 
         po_codes = {_normalize_code(definition.code) for definition in self.pos}
+        mapped_course_outcomes: set[tuple[str, str]] = set()
         for mapping in self.mappings:
             course_key = _normalize_code(mapping.course_code)
             if course_key not in course_outcomes:
@@ -109,6 +116,17 @@ class CurriculumDraftResponse(BaseModel):
                     f"Mapping references unknown program outcome "
                     f"'{mapping.program_outcome_code}'"
                 )
+            mapped_course_outcomes.add(
+                (course_key, _normalize_code(mapping.course_outcome_code))
+            )
+
+        for course_code, outcome_codes in course_outcomes.items():
+            for outcome_code in outcome_codes:
+                if (course_code, outcome_code) not in mapped_course_outcomes:
+                    raise ValueError(
+                        f"Course outcome '{outcome_code}' for course "
+                        f"'{course_code}' has no program outcome mapping"
+                    )
         return self
 
     @classmethod

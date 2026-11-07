@@ -1,12 +1,26 @@
 import json
+import logging
+import time
 from typing import Any, Protocol
 
 import httpx
 from pydantic import SecretStr
 
 from app.core.errors import ServiceUnavailableError
+from app.core.logging_config import safe_exception_details
 
 DOCUMENT_TEXT_MAX_CHARS = 120_000
+_DEFAULT_DRAFT_MAX_OUTPUT_TOKENS = 16_384
+_GEMINI_2_5_MAX_OUTPUT_TOKENS = 32_768
+_RETRYABLE_PROVIDER_STATUSES = {408, 429, 500, 502, 503, 504}
+_MAX_PROVIDER_ATTEMPTS = 3
+logger = logging.getLogger(__name__)
+
+
+def _draft_max_output_tokens(model: str) -> int:
+    if model.lower().startswith("gemini-2.5-"):
+        return _GEMINI_2_5_MAX_OUTPUT_TOKENS
+    return _DEFAULT_DRAFT_MAX_OUTPUT_TOKENS
 
 _SYSTEM_PROMPT = (
     "You are a curriculum analysis assistant for an academic institution. "
@@ -60,11 +74,12 @@ _DRAFT_SYSTEM_PROMPT = (
     "course outcomes.\n"
     "- Every mapping references codes defined above: course_code and "
     "course_outcome_code belong to the same course, program_outcome_code comes "
-    "from the pos list, and level is 1, 2 or 3. Provide basic coverage across "
-    "the program.\n"
+    "from the pos list, and level is 1, 2 or 3. Map every course outcome to "
+    "at least one relevant PO, with 1-2 mappings per course outcome.\n"
+    "- If the documents do not define POs or PEOs, propose suitable draft "
+    "outcomes for the named program; do not leave either list empty. These are "
+    "AI suggestions, not claims that the source documents stated them.\n"
     "- Keep summaries short (at most 2 sentences).\n"
-    "- PEOs must never be empty; when the documents define no program outcomes, "
-    "leave pos empty.\n"
 )
 
 
@@ -132,7 +147,7 @@ class OpenAICompatibleLLMClient:
             ],
         }
         try:
-            content = self._request(payload)
+            content = self._request(payload, operation="analysis")
         except LLMResponseError:
             raise
         except Exception as exc:
@@ -147,51 +162,147 @@ class OpenAICompatibleLLMClient:
         payload = {
             "model": self._model,
             "temperature": 0,
+            "max_tokens": _draft_max_output_tokens(self._model),
             "messages": [
                 {"role": "system", "content": _DRAFT_SYSTEM_PROMPT},
                 {"role": "user", "content": f"Document content:\n{truncated}"},
             ],
         }
         try:
-            content = self._request(payload)
+            content = self._request(payload, operation="draft")
         except LLMResponseError:
             raise
         except Exception as exc:
             raise LLMResponseError(f"LLM request failed: {exc}") from exc
         return _parse_json_object(content)
 
-    def _request(self, payload: dict[str, Any]) -> str:
+    def _request(self, payload: dict[str, Any], operation: str) -> str:
         headers = {"Authorization": f"Bearer {self._api_key.get_secret_value()}"}
-        if self._http_client is not None:
-            response = self._http_client.post(
-                f"{self._base_url}/chat/completions",
-                json=payload,
-                headers=headers,
-            )
-        else:
-            with httpx.Client(timeout=self._timeout_seconds) as client:
-                response = client.post(
-                    f"{self._base_url}/chat/completions",
-                    json=payload,
-                    headers=headers,
+        started_at = time.perf_counter()
+        logger.info(
+            "LLM provider request started",
+            extra={"operation": operation, "model": self._model},
+        )
+        for attempt in range(_MAX_PROVIDER_ATTEMPTS):
+            try:
+                if self._http_client is not None:
+                    response = self._http_client.post(
+                        f"{self._base_url}/chat/completions",
+                        json=payload,
+                        headers=headers,
+                    )
+                else:
+                    with httpx.Client(timeout=self._timeout_seconds) as client:
+                        response = client.post(
+                            f"{self._base_url}/chat/completions",
+                            json=payload,
+                            headers=headers,
+                        )
+            except httpx.HTTPError as exc:
+                logger.error(
+                    "LLM provider transport failed",
+                    extra={
+                        "operation": operation,
+                        "model": self._model,
+                        "attempt": attempt + 1,
+                        "max_attempts": _MAX_PROVIDER_ATTEMPTS,
+                        **safe_exception_details(exc),
+                    },
                 )
-        if response.status_code >= 400:
-            raise LLMResponseError(
-                f"LLM provider returned status {response.status_code}"
-            )
-        body = response.json()
+                raise
+            if (
+                response.status_code in _RETRYABLE_PROVIDER_STATUSES
+                and attempt < _MAX_PROVIDER_ATTEMPTS - 1
+            ):
+                logger.warning(
+                    "Retrying transient LLM provider response",
+                    extra={
+                        "operation": operation,
+                        "model": self._model,
+                        "provider_status": response.status_code,
+                        "attempt": attempt + 1,
+                        "max_attempts": _MAX_PROVIDER_ATTEMPTS,
+                    },
+                )
+                retry_after = response.headers.get("retry-after")
+                try:
+                    delay = float(retry_after) if retry_after is not None else 2**attempt
+                except ValueError:
+                    delay = 2**attempt
+                time.sleep(max(0, min(delay, 5)))
+                continue
+            if response.status_code >= 400:
+                logger.error(
+                    "LLM provider returned an error response",
+                    extra={
+                        "operation": operation,
+                        "model": self._model,
+                        "provider_status": response.status_code,
+                        "attempt": attempt + 1,
+                    },
+                )
+                detail = _provider_error_detail(response)
+                suffix = f": {detail}" if detail else ""
+                raise LLMResponseError(
+                    f"LLM provider returned status {response.status_code}{suffix}"
+                )
+            break
         try:
-            return body["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as exc:
-            raise LLMResponseError("LLM response has no message content") from exc
+            body = response.json()
+            choice = body["choices"][0]
+            content = choice["message"]["content"]
+        except (ValueError, KeyError, IndexError, TypeError) as exc:
+            logger.error(
+                "LLM provider response could not be parsed",
+                extra={"operation": operation, "model": self._model},
+            )
+            raise LLMResponseError("LLM response has no usable message content") from exc
+        if choice.get("finish_reason") == "length":
+            logger.error(
+                "LLM provider response was truncated",
+                extra={"operation": operation, "model": self._model},
+            )
+            raise LLMResponseError(
+                "LLM response was truncated at the output token limit; "
+                "increase the model output-token limit"
+            )
+        if not isinstance(content, str) or not content.strip():
+            logger.error(
+                "LLM provider response contained no usable content",
+                extra={"operation": operation, "model": self._model},
+            )
+            raise LLMResponseError("LLM response has no usable message content")
+        logger.info(
+            "LLM provider request completed",
+            extra={
+                "operation": operation,
+                "model": self._model,
+                "duration_ms": round((time.perf_counter() - started_at) * 1000, 2),
+            },
+        )
+        return content
+
+
+def _provider_error_detail(response: httpx.Response) -> str:
+    try:
+        body = response.json()
+    except ValueError:
+        return ""
+    error = body.get("error") if isinstance(body, dict) else None
+    message = error.get("message") if isinstance(error, dict) else None
+    return message.strip()[:300] if isinstance(message, str) else ""
 
 
 def _parse_json_object(content: str) -> dict[str, Any]:
     text = content.strip()
     if text.startswith("```"):
-        text = text.strip("`")
-        if text.startswith("json"):
-            text = text[4:]
+        fenced_text = text[3:]
+        first_line, separator, body = fenced_text.partition("\n")
+        if first_line.strip().lower() in {"", "json"}:
+            text = body if separator else first_line
+        else:
+            text = fenced_text
+        text = text.rsplit("```", 1)[0].strip()
     try:
         parsed = json.loads(text)
     except (TypeError, ValueError) as exc:

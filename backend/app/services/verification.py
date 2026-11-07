@@ -1,3 +1,5 @@
+import logging
+import time
 import uuid
 from collections import deque
 from decimal import Decimal
@@ -49,6 +51,8 @@ ANALYZED_PREREQUISITE_STATUSES = (
     PrerequisiteStatus.APPROVED.value,
     PrerequisiteStatus.REJECTED.value,
 )
+
+logger = logging.getLogger(__name__)
 
 SEVERITY_ORDER = {
     FindingSeverity.INFO.value: 0,
@@ -163,6 +167,7 @@ class VerificationService:
         curriculum_id: uuid.UUID,
         version_id: uuid.UUID,
     ) -> VerificationRunResponse:
+        started_at = time.perf_counter()
         self._get_version_or_404(curriculum_id, version_id)
         run = VerificationRun(
             curriculum_version_id=version_id,
@@ -180,9 +185,22 @@ class VerificationService:
             new_values={"status": run.status},
         )
 
+        logger.info(
+            "Verification analysis started",
+            extra={"actor_id": str(actor_id), "verification_run_id": str(run.id)},
+        )
         try:
             drafts = self._analyze_version(version_id)
-        except Exception:
+        except Exception as exc:
+            logger.error(
+                "Verification analysis failed",
+                extra={
+                    "actor_id": str(actor_id),
+                    "verification_run_id": str(run.id),
+                    "duration_ms": round((time.perf_counter() - started_at) * 1000, 2),
+                    "exception_type": type(exc).__name__,
+                },
+            )
             run.status = VerificationRunStatus.FAILED.value
             run.completed_at = utc_now()
             run.error_message = "Verification analysis failed; see logs"
@@ -196,6 +214,15 @@ class VerificationService:
             run.summary = self._build_summary(drafts)
             self._session.commit()
 
+        logger.info(
+            "Verification run completed",
+            extra={
+                "actor_id": str(actor_id),
+                "verification_run_id": str(run.id),
+                "finding_count": len(drafts),
+                "duration_ms": round((time.perf_counter() - started_at) * 1000, 2),
+            },
+        )
         return VerificationRunResponse.from_model(run)
 
     def list_runs(

@@ -148,6 +148,12 @@ def make_draft_payload() -> dict[str, Any]:
                 "level": 3,
             },
             {
+                "course_code": "CS201",
+                "course_outcome_code": "CO2",
+                "program_outcome_code": "PO2",
+                "level": 2,
+            },
+            {
                 "course_code": "CS202",
                 "course_outcome_code": "CO1",
                 "program_outcome_code": "PO5",
@@ -323,7 +329,7 @@ def test_generate_returns_draft_from_single_text_document(client, faculty_token)
     assert all(semester["courses"] for semester in body["semesters"])
     assert len(body["peos"]) == 3
     assert len(body["pos"]) == 5
-    assert len(body["mappings"]) == 5
+    assert len(body["mappings"]) == 6
     assert all(mapping["level"] in (1, 2, 3) for mapping in body["mappings"])
     assert any(
         mapping["course_code"] == "CS101"
@@ -406,10 +412,27 @@ def test_generate_rejects_invalid_llm_payload(client, faculty_token):
     finally:
         release_llm(client)
 
-    assert response.status_code == 400
+    assert response.status_code == 503
     body = response.json()
-    assert body["error"]["code"] == "invalid_draft"
+    assert body["error"]["code"] == "llm_draft_failed"
     assert "invalid" in body["error"]["message"].lower()
+
+
+def test_generate_rejects_draft_without_program_outcomes_or_mappings(
+    client, faculty_token
+):
+    payload = make_draft_payload()
+    payload["pos"] = []
+    payload["mappings"] = []
+    stub = StubDraftLLMClient(result=payload)
+    override_llm(client, stub)
+    try:
+        response = generate(client, faculty_token, [("syllabus.txt", b"content")])
+    finally:
+        release_llm(client)
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "llm_draft_failed"
 
 
 def test_generate_llm_failure_returns_service_unavailable(client, faculty_token):

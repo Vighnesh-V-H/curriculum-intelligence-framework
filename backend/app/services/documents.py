@@ -1,5 +1,6 @@
 import hashlib
 import io
+import logging
 import uuid
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,7 @@ from app.services.uploadthing import (
 )
 
 _ERROR_MESSAGE_MAX_CHARS = 480
+logger = logging.getLogger(__name__)
 
 
 class DocumentProcessingService:
@@ -94,6 +96,10 @@ class DocumentProcessingService:
 
         if self._storage is None:
             raise UploadThingNotConfiguredError()
+        logger.info(
+            "Document upload started",
+            extra={"actor_id": str(actor.id), "file_size_bytes": total},
+        )
         try:
             stored = self._storage.upload_file(
                 buffer.getvalue(), original_filename, uploaded_file.content_type
@@ -118,9 +124,22 @@ class DocumentProcessingService:
         self._documents.add(document)
         self._audit(actor.id, "CREATE", document.id, {"status": document.status})
         self._session.commit()
+        logger.info(
+            "Document upload completed",
+            extra={
+                "actor_id": str(actor.id),
+                "document_id": str(document.id),
+                "document_status": document.status,
+                "file_size_bytes": total,
+            },
+        )
         return DocumentResponse.from_model(document)
 
     def ingest(self, actor: User, document_id: uuid.UUID) -> DocumentResponse:
+        logger.info(
+            "Document ingestion started",
+            extra={"actor_id": str(actor.id), "document_id": str(document_id)},
+        )
         document = self._documents.get_by_id(document_id)
         if document is None:
             raise NotFoundError("Document not found")
@@ -148,17 +167,38 @@ class DocumentProcessingService:
                     "(scanned documents without OCR are not supported)"
                 )
         except DocumentIngestFailure as exc:
+            logger.warning(
+                "Document text extraction failed",
+                extra={
+                    "actor_id": str(actor.id),
+                    "document_id": str(document.id),
+                    "document_status": DocumentStatus.FAILED.value,
+                    "exception_type": type(exc).__name__,
+                },
+            )
             self._fail(actor, document, str(exc))
             return DocumentResponse.from_model(document)
 
         try:
             analysis = self._llm_client.analyze_document(text, document.original_filename)
         except LLMNotConfiguredError:
+            logger.warning(
+                "Document analysis unavailable: LLM is not configured",
+                extra={"actor_id": str(actor.id), "document_id": str(document.id)},
+            )
             document.status = DocumentStatus.UPLOADED.value
             self._audit(actor.id, "UPDATE", document.id, {"status": document.status})
             self._session.commit()
             raise
         except LLMResponseError as exc:
+            logger.error(
+                "Document LLM analysis failed",
+                extra={
+                    "actor_id": str(actor.id),
+                    "document_id": str(document.id),
+                    "exception_type": type(exc).__name__,
+                },
+            )
             self._fail(actor, document, f"LLM analysis failed: {exc}")
             return DocumentResponse.from_model(document)
 
@@ -169,6 +209,16 @@ class DocumentProcessingService:
         document.processed_at = utc_now()
         self._audit(actor.id, "UPDATE", document.id, {"status": document.status})
         self._session.commit()
+        logger.info(
+            "Document ingestion completed",
+            extra={
+                "actor_id": str(actor.id),
+                "document_id": str(document.id),
+                "document_status": document.status,
+                "text_chars": len(text),
+                "model": document.llm_model,
+            },
+        )
         return DocumentResponse.from_model(document)
 
     def get(self, document_id: uuid.UUID) -> DocumentResponse:

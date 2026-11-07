@@ -1,11 +1,12 @@
 import uuid
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.errors import ForbiddenError, UnauthorizedError
+from app.core.logging_config import set_actor_id
 from app.core.security import (
     JwtService,
     PasswordService,
@@ -364,6 +365,7 @@ def get_verification_service(
 
 
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     users: UserRepository = Depends(get_user_repository),
     tokens: JwtService = Depends(get_jwt_service),
@@ -384,6 +386,9 @@ def get_current_user(
     user = users.get_by_id(user_id)
     if user is None or user.status != UserStatus.ACTIVE.value:
         raise UnauthorizedError("User is not active", "invalid_token")
+    actor_id = str(user.id)
+    request.state.actor_id = actor_id
+    set_actor_id(actor_id)
     return user
 
 

@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -10,12 +11,14 @@ import httpx
 from sqids import Sqids
 
 from app.core.errors import ServiceUnavailableError
+from app.core.logging_config import safe_exception_details
 
 UPLOADTHING_VERSION = "7.7.4"
 _KEY_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 _PRESIGN_TTL_SECONDS = 3600
 _READ_TTL_SECONDS = 300
 _SIGNATURE_PREFIX = "hmac-sha256="
+logger = logging.getLogger(__name__)
 
 
 class UploadThingError(Exception):
@@ -191,13 +194,35 @@ class HttpxUploadThingClient:
         return f"{source}&signature={_js_query_encode(_sign_url(source, credentials.api_key))}"
 
     def _send(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        started_at = time.perf_counter()
+        logger.info(
+            "Storage provider request started",
+            extra={"operation": "uploadthing_http", "method": method},
+        )
         try:
             if self._http_client is not None:
-                return self._http_client.request(method, url, **kwargs)
-            with httpx.Client(timeout=self._timeout_seconds) as client:
-                return client.request(method, url, **kwargs)
+                response = self._http_client.request(method, url, **kwargs)
+            else:
+                with httpx.Client(timeout=self._timeout_seconds) as client:
+                    response = client.request(method, url, **kwargs)
         except httpx.HTTPError as exc:
+            logger.error(
+                "Storage provider transport failed",
+                extra={"operation": "uploadthing_http", "method": method,
+                       **safe_exception_details(exc)},
+            )
             raise UploadThingError(f"UploadThing request failed: {exc}") from exc
+        log_method = logger.warning if response.status_code >= 400 else logger.info
+        log_method(
+            "Storage provider request completed",
+            extra={
+                "operation": "uploadthing_http",
+                "method": method,
+                "provider_status": response.status_code,
+                "duration_ms": round((time.perf_counter() - started_at) * 1000, 2),
+            },
+        )
+        return response
 
     def _parse_json(self, response: httpx.Response, required_key: str) -> dict[str, Any]:
         if response.status_code >= 400:

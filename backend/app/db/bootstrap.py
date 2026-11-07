@@ -44,4 +44,4 @@ def bootstrap_admin() -> None:
         users.add(user)
         users.add_role_assignment(UserRole(user_id=user.id, role_id=admin_role.id))
         session.commit()
-        logger.info("Bootstrap administrator '%s' created", username)
+        logger.info("Bootstrap administrator created")

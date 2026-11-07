@@ -2,7 +2,6 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import {
   BookOpenText,
   FileStack,
@@ -39,32 +38,35 @@ export function WorkspaceNav({
   onGenerate,
   children,
 }: {
-  active: "dashboard" | "documents";
+  active: "dashboard" | "documents" | "drafts";
   user: User;
   onSignOut: () => void;
   onGenerate?: () => void;
   children: ReactNode;
 }) {
-  const pathname = usePathname();
+  const navItems = onGenerate
+    ? [...NAV_ITEMS, { href: "/curriculum-drafts/new", label: "Draft studio", key: "drafts", Icon: Sparkles }]
+    : NAV_ITEMS;
 
   return (
     <SidebarProvider className="workspace-provider">
       <Sidebar collapsible="icon" className="app-sidebar">
-        <SidebarHeader className="workspace-sidebar-header group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-2">
+        <SidebarHeader role="region" aria-label="Workspace home" className="workspace-sidebar-header group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-2">
           <Link className="workspace-brand" href="/dashboard" aria-label="Curriculum Intelligence home">
             <span className="workspace-brand-mark">C</span>
             <span className="workspace-brand-copy group-data-[collapsible=icon]:hidden">Curriculum <b>Intelligence</b></span>
           </Link>
         </SidebarHeader>
         <SidebarContent>
+          <nav aria-label="Workspace navigation">
           <SidebarGroup>
             <SidebarGroupLabel>Workspace</SidebarGroupLabel>
             <SidebarMenu>
-              {NAV_ITEMS.map(({ href, label, key, Icon }) => (
+              {navItems.map(({ href, label, key, Icon }) => (
                 <SidebarMenuItem key={key}>
                   <SidebarMenuButton
                     render={<Link href={href} />}
-                    isActive={pathname === href}
+                    isActive={active === key}
                     tooltip={label}
                   >
                     <Icon aria-hidden="true" />
@@ -74,8 +76,9 @@ export function WorkspaceNav({
               ))}
             </SidebarMenu>
           </SidebarGroup>
+          </nav>
         </SidebarContent>
-        <SidebarFooter className="workspace-sidebar-footer group-data-[collapsible=icon]:p-2">
+        <SidebarFooter role="region" aria-label="Account" className="workspace-sidebar-footer group-data-[collapsible=icon]:p-2">
           <div className="sidebar-user group-data-[collapsible=icon]:hidden" title={user.email}>
             <span className="account-avatar" aria-hidden="true">
               {user.full_name.trim().charAt(0).toUpperCase()}
@@ -99,14 +102,14 @@ export function WorkspaceNav({
         <header className="workspace-topbar">
           <div className="topbar-context">
             <SidebarTrigger className="topbar-sidebar-trigger" />
-            <div className="workspace-crumb"><span>Workspace</span><i>/</i>{active === "dashboard" ? "Overview" : "Documents"}</div>
+            <div className="workspace-crumb"><span>Workspace</span><i>/</i>{active === "dashboard" ? "Overview" : active === "documents" ? "Documents" : "Draft studio"}</div>
           </div>
           <div className="topbar-actions">
             <ThemeToggle />
             {onGenerate ? (
-            <button className="topbar-generate" onClick={onGenerate} type="button">
+            <button className="topbar-generate" onClick={onGenerate} type="button" aria-label="Open curriculum draft studio">
               <Sparkles size={16} strokeWidth={1.9} />
-              <span>Generate curriculum</span>
+              <span>Open draft studio</span>
             </button>
             ) : null}
           </div>

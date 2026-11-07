@@ -2,9 +2,6 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { WorkspaceNav } from "@/components/workspace-nav";
-import { GenerateCurriculumDialog } from "@/components/generate-curriculum-dialog";
-
 import {
   ApiError,
   Document,
@@ -78,8 +75,6 @@ export default function DocumentsPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [ingestingId, setIngestingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [generateOpen, setGenerateOpen] = useState(false);
-
   const canWrite = user
     ? user.roles.some((role) => WRITER_ROLES.has(role))
     : false;
@@ -207,16 +202,6 @@ export default function DocumentsPage() {
   }
 
   return (
-    <WorkspaceNav
-      active="documents"
-      user={user}
-      onSignOut={handleSignOut}
-      onGenerate={canWrite ? () => setGenerateOpen(true) : undefined}
-    >
-      <GenerateCurriculumDialog
-        open={generateOpen}
-        onOpenChange={setGenerateOpen}
-      />
       <div className="mx-auto max-w-5xl">
         <header className="page-heading flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -416,6 +401,5 @@ export default function DocumentsPage() {
           )}
         </section>
       </div>
-    </WorkspaceNav>
   );
 }

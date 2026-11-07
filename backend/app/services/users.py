@@ -1,3 +1,4 @@
+import logging
 import uuid
 
 from sqlalchemy.exc import IntegrityError
@@ -12,6 +13,7 @@ from app.schemas.auth import RegisterRequest
 from app.schemas.user import CreateUserRequest, UserResponse
 
 SELF_REGISTRATION_ROLE = RoleCode.FACULTY
+logger = logging.getLogger(__name__)
 
 
 class UserService:
@@ -53,6 +55,10 @@ class UserService:
         created = self._users.get_by_id(user.id)
         if created is None:
             raise NotFoundError("User could not be loaded after creation")
+        logger.info(
+            "User self-registration completed",
+            extra={"actor_id": str(created.id)},
+        )
         return UserResponse.from_user(created)
 
     def create_user(self, actor_id: uuid.UUID, request: CreateUserRequest) -> UserResponse:
@@ -83,6 +89,10 @@ class UserService:
         created = self._users.get_by_id(user.id)
         if created is None:
             raise NotFoundError("User could not be loaded after creation")
+        logger.info(
+            "User created by administrator",
+            extra={"target_user_id": str(created.id)},
+        )
         return UserResponse.from_user(created)
 
     def list_users(self) -> list[UserResponse]:
