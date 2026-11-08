@@ -38,7 +38,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ApiError, api } from "@/lib/api";
-import type { CourseType, CurriculumDraft, DraftCourse, DraftSemester, Program } from "@/lib/api";
+import type { CourseType, CurriculumDraft, DraftCourse, DraftMapping, DraftOutcome, DraftSemester, Program } from "@/lib/api";
 
 const ALLOWED_EXTENSIONS = [".pdf", ".docx", ".txt", ".md", ".csv"];
 const MAX_FILE_MB = 20;
@@ -103,27 +103,93 @@ function downloadDraft(draft: CurriculumDraft): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function CourseEntry({ course }: { course: DraftCourse }) {
+function CourseEntry({
+  course,
+  editable,
+  onChange,
+}: {
+  course: DraftCourse;
+  editable: boolean;
+  onChange: (patch: Partial<DraftCourse>) => void;
+}) {
   return (
-    <article className="draft-course">
+    <article className={`draft-course${editable ? " is-editing" : ""}`}>
       <div className="draft-course__heading">
         <Badge variant="outline">{course.code}</Badge>
         <div className="draft-course__name">
-          <h3>{course.title}</h3>
-          <p>{course.summary}</p>
+          {editable ? (
+            <>
+              <label>
+                Course title
+                <input
+                  value={course.title}
+                  onChange={(event) => onChange({ title: event.target.value })}
+                />
+              </label>
+              <label>
+                Summary
+                <textarea
+                  rows={2}
+                  value={course.summary}
+                  onChange={(event) => onChange({ summary: event.target.value })}
+                />
+              </label>
+            </>
+          ) : (
+            <><h3>{course.title}</h3><p>{course.summary}</p></>
+          )}
         </div>
         <div className="draft-course__meta">
-          {course.credits !== null ? <span>{course.credits} credits</span> : null}
-          {course.category ? <span>{course.category}</span> : null}
+          {editable ? (
+            <>
+              <label>
+                Category
+                <input
+                  value={course.category}
+                  onChange={(event) => onChange({ category: event.target.value })}
+                />
+              </label>
+              <label>
+                Credits
+                <input
+                  type="number"
+                  min="1"
+                  max="30"
+                  step="1"
+                  value={course.credits ?? ""}
+                  onChange={(event) =>
+                    onChange({ credits: event.target.value ? Number(event.target.value) : null })
+                  }
+                />
+              </label>
+            </>
+          ) : (
+            <>{course.credits !== null ? <span>{course.credits} credits</span> : null}{course.category ? <span>{course.category}</span> : null}</>
+          )}
         </div>
       </div>
       <div className="draft-course__outcomes">
         <p>Course outcomes</p>
         <ul>
-          {course.outcomes.map((outcome) => (
-            <li key={`${course.code}-${outcome.code}`}>
-              <span>{outcome.code}</span>
-              <p>{outcome.statement}</p>
+          {course.outcomes.map((outcome, index) => (
+            <li key={`${course.code}-${index}`}>
+              {editable ? (
+                <>
+                  <span className="draft-course__outcome-code">{outcome.code}</span>
+                  <textarea
+                    aria-label={`Outcome statement ${index + 1}`}
+                    rows={2}
+                    value={outcome.statement}
+                    onChange={(event) => onChange({
+                      outcomes: course.outcomes.map((item, itemIndex) =>
+                        itemIndex === index ? { ...item, statement: event.target.value } : item,
+                      ),
+                    })}
+                  />
+                </>
+              ) : (
+                <><span>{outcome.code}</span><p>{outcome.statement}</p></>
+              )}
             </li>
           ))}
         </ul>
@@ -140,14 +206,86 @@ function DraftResults({
   onStartOver: () => void;
 }) {
   const [view, setView] = useState<DraftView>("roadmap");
+  const [workingDraft, setWorkingDraft] = useState(draft);
+  const [editing, setEditing] = useState(false);
   const [programs, setPrograms] = useState<Program[]>([]);
   const [courseTypes, setCourseTypes] = useState<CourseType[]>([]);
   const [courseTypeCodes, setCourseTypeCodes] = useState<Record<string, string>>({});
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [savedCurriculumId, setSavedCurriculumId] = useState("");
-  const categories = [...new Set(draft.semesters.flatMap((semester) => semester.courses.map((course) => course.category.trim().toLowerCase())))];
-  const missingCreditCourses = draft.semesters.flatMap((semester) => semester.courses).filter((course) => course.credits === null);
+  const categories = [
+    ...new Set(
+      workingDraft.semesters.flatMap((semester) =>
+        semester.courses.map((course) => course.category.trim().toLowerCase()).filter(Boolean),
+      ),
+    ),
+  ];
+  const missingCreditCourses = workingDraft.semesters
+    .flatMap((semester) => semester.courses)
+    .filter((course) => course.credits === null);
+
+  function updateCourse(semesterNumber: number, courseCode: string, patch: Partial<DraftCourse>) {
+    setWorkingDraft((current) => ({
+      ...current,
+      semesters: current.semesters.map((semester) => {
+        if (semester.semester_number !== semesterNumber) return semester;
+        return {
+          ...semester,
+          courses: semester.courses.map((course) =>
+            course.code === courseCode ? { ...course, ...patch } : course,
+          ),
+        };
+      }),
+    }));
+  }
+
+  function updateSemester(semesterNumber: number, patch: Partial<DraftSemester>) {
+    setWorkingDraft((current) => ({
+      ...current,
+      semesters: current.semesters.map((semester) =>
+        semester.semester_number === semesterNumber ? { ...semester, ...patch } : semester,
+      ),
+    }));
+  }
+
+  function updateDefinition(kind: "peos" | "pos", index: number, patch: Partial<DraftOutcome>) {
+    setWorkingDraft((current) => ({
+      ...current,
+      [kind]: current[kind].map((definition, definitionIndex) =>
+        definitionIndex === index ? { ...definition, ...patch } : definition,
+      ),
+    }));
+  }
+
+  function updateMapping(
+    courseCode: string,
+    outcomeCode: string,
+    programOutcomeCode: string,
+    level: number,
+  ) {
+    setWorkingDraft((current) => {
+      const matches = (mapping: DraftMapping) =>
+        mapping.course_code.toUpperCase() === courseCode.toUpperCase()
+        && mapping.course_outcome_code.toUpperCase() === outcomeCode.toUpperCase()
+        && mapping.program_outcome_code.toUpperCase() === programOutcomeCode.toUpperCase();
+      const present = current.mappings.some(matches);
+      const typedLevel = level as 1 | 2 | 3;
+      const mappings = level === 0
+        ? current.mappings.filter((mapping) => !matches(mapping))
+        : present
+          ? current.mappings.map((mapping) =>
+            matches(mapping) ? { ...mapping, level: typedLevel } : mapping,
+          )
+          : [...current.mappings, {
+            course_code: courseCode,
+            course_outcome_code: outcomeCode,
+            program_outcome_code: programOutcomeCode,
+            level: typedLevel,
+          }];
+      return { ...current, mappings };
+    });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -166,7 +304,7 @@ function DraftResults({
       })
       .catch((caught) => setSaveError(caught instanceof ApiError ? caught.message : "Could not load programs and course types."));
     return () => { cancelled = true; };
-  // Categories are immutable for this generated result.
+  // Seed defaults from the generated categories; edited categories require a new choice.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -185,7 +323,7 @@ function DraftResults({
         title: String(form.get("title") || "") || null,
         course_type_codes: courseTypeCodes,
         credits_by_course_code: credits,
-        draft,
+        draft: workingDraft,
       });
       setSavedCurriculumId(saved.id);
     } catch (caught) {
@@ -193,14 +331,14 @@ function DraftResults({
     } finally { setSaveBusy(false); }
   }
   const [selectedSemester, setSelectedSemester] = useState(
-    draft.semesters[0]?.semester_number ?? 1,
+    workingDraft.semesters[0]?.semester_number ?? 1,
   );
   const selected =
-    draft.semesters.find((semester) => semester.semester_number === selectedSemester) ??
-    draft.semesters[0];
-  const outcomes = courseOutcomeRows(draft.semesters);
+    workingDraft.semesters.find((semester) => semester.semester_number === selectedSemester) ??
+    workingDraft.semesters[0];
+  const outcomes = courseOutcomeRows(workingDraft.semesters);
   const mappedOutcomes = new Set(
-    draft.mappings.map(
+    workingDraft.mappings.map(
       (mapping) =>
         `${mapping.course_code.toUpperCase()}|${mapping.course_outcome_code.toUpperCase()}`,
     ),
@@ -210,12 +348,22 @@ function DraftResults({
   ).length;
   const coverage = outcomes.length === 0 ? 0 : Math.round((mappedCount / outcomes.length) * 100);
   const mappingLevels = new Map(
-    draft.mappings.map((mapping) => [
+    workingDraft.mappings.map((mapping) => [
       `${mapping.course_code.toUpperCase()}|${mapping.course_outcome_code.toUpperCase()}|${mapping.program_outcome_code.toUpperCase()}`,
       mapping.level,
     ]),
   );
-  const programOutcomeCodes = draft.pos.map((outcome) => outcome.code.toUpperCase());
+  const programOutcomeCodes = workingDraft.pos.map((outcome) => outcome.code.toUpperCase());
+  const hasRequiredText = Boolean(workingDraft.program.summary.trim())
+    && workingDraft.semesters.every((semester) => Boolean(semester.semester_name.trim() && semester.focus.trim())
+      && semester.courses.every((course) => Boolean(course.title.trim() && course.category.trim() && course.summary.trim())
+        && course.outcomes.length > 0 && course.outcomes.every((outcome) => Boolean(outcome.code.trim() && outcome.statement.trim()))))
+    && [...workingDraft.peos, ...workingDraft.pos].every((outcome) => Boolean(outcome.code.trim() && outcome.statement.trim()));
+  const hasValidCredits = workingDraft.semesters.every((semester) => semester.courses.every(
+    (course) => course.credits === null || (course.credits > 0 && course.credits <= 30),
+  ));
+  const canSave = coverage === 100 && hasRequiredText && hasValidCredits
+    && categories.every((category) => Boolean(courseTypeCodes[category]));
 
   return (
     <div className="draft-results">
@@ -225,9 +373,12 @@ function DraftResults({
           Workspace overview
         </Link>
         <div className="draft-results__actions">
-          <Button variant="outline" onClick={() => downloadDraft(draft)}>
+          <Button variant="outline" onClick={() => downloadDraft(workingDraft)}>
             <ArrowDownToLine data-icon="inline-start" aria-hidden="true" />
             Download JSON
+          </Button>
+          <Button variant="outline" aria-pressed={editing} disabled={Boolean(savedCurriculumId)} onClick={() => setEditing((current) => !current)}>
+            {editing ? "Finish editing" : "Edit generated content"}
           </Button>
           <Button variant="secondary" onClick={onStartOver}>
             Start another draft
@@ -236,6 +387,7 @@ function DraftResults({
         </div>
       </div>
 
+      {editing && <p className="draft-editing-note" role="status">Changes apply to this preview only. Review mappings and required fields before saving.</p>}
       <header className="draft-results__intro">
         <div className="draft-results__eyebrow">
           <Badge variant="secondary">
@@ -246,13 +398,15 @@ function DraftResults({
         </div>
         <div className="draft-results__title-row">
           <div>
-            <h1>{draft.program.name ?? "Curriculum draft"}</h1>
-            <p>{draft.program.summary}</p>
+            <h1>{workingDraft.program.name ?? "Curriculum draft"}</h1>
+            {editing ? (
+              <label className="draft-program-summary">Program summary<textarea rows={3} value={workingDraft.program.summary} onChange={(event) => setWorkingDraft((current) => ({ ...current, program: { ...current.program, summary: event.target.value } }))} /></label>
+            ) : <p>{workingDraft.program.summary}</p>}
           </div>
           <div className="draft-results__program-meta">
-            {draft.program.degree ? <span>{draft.program.degree}</span> : null}
-            {draft.program.duration_years ? (
-              <span>{draft.program.duration_years} years</span>
+            {workingDraft.program.degree ? <span>{workingDraft.program.degree}</span> : null}
+            {workingDraft.program.duration_years ? (
+              <span>{workingDraft.program.duration_years} years</span>
             ) : null}
           </div>
         </div>
@@ -261,15 +415,15 @@ function DraftResults({
       <dl className="draft-summary" aria-label="Draft summary">
         <div>
           <dt>Semesters</dt>
-          <dd>{draft.semesters.length}</dd>
+          <dd>{workingDraft.semesters.length}</dd>
         </div>
         <div>
           <dt>Courses</dt>
-          <dd>{countCourses(draft.semesters)}</dd>
+          <dd>{countCourses(workingDraft.semesters)}</dd>
         </div>
         <div>
           <dt>Program outcomes</dt>
-          <dd>{draft.pos.length}</dd>
+          <dd>{workingDraft.pos.length}</dd>
         </div>
         <div>
           <dt>Mapped course outcomes</dt>
@@ -304,7 +458,7 @@ function DraftResults({
         <section className="draft-roadmap" aria-label="Curriculum roadmap">
           <nav className="draft-semester-nav" aria-label="Choose a semester">
             <h2>Semester plan</h2>
-            {draft.semesters.map((semester) => (
+            {workingDraft.semesters.map((semester) => (
               <button
                 type="button"
                 key={semester.semester_number}
@@ -336,11 +490,21 @@ function DraftResults({
                   <h2>{selected.semester_name}</h2>
                 </div>
                 <Badge variant="outline">{selected.courses.length} courses</Badge>
-                <span className="draft-semester-detail__focus">{selected.focus}</span>
+                {editing ? (
+                <div className="draft-semester-edit-fields">
+                  <label>Semester name<input value={selected.semester_name} onChange={(event) => updateSemester(selected.semester_number, { semester_name: event.target.value })} /></label>
+                  <label>Focus<textarea rows={2} value={selected.focus} onChange={(event) => updateSemester(selected.semester_number, { focus: event.target.value })} /></label>
+                </div>
+              ) : <span className="draft-semester-detail__focus">{selected.focus}</span>}
               </header>
               <div className="draft-course-list">
                 {selected.courses.map((course) => (
-                  <CourseEntry key={course.code} course={course} />
+                  <CourseEntry
+                    key={course.code}
+                    course={course}
+                    editable={editing}
+                    onChange={(patch) => updateCourse(selected.semester_number, course.code, patch)}
+                  />
                 ))}
               </div>
             </div>
@@ -356,12 +520,12 @@ function DraftResults({
                 <p>Graduate objectives</p>
                 <h2>Program educational objectives</h2>
               </header>
-              {draft.peos.length ? (
+              {workingDraft.peos.length ? (
                 <ol className="draft-outcome-list">
-                  {draft.peos.map((peo) => (
+                  {workingDraft.peos.map((peo, index) => (
                     <li key={peo.code}>
                       <Badge variant="outline">{peo.code}</Badge>
-                      <p>{peo.statement}</p>
+                      {editing ? <textarea aria-label={`${peo.code} statement`} rows={3} value={peo.statement} onChange={(event) => updateDefinition("peos", index, { statement: event.target.value })} /> : <p>{peo.statement}</p>}
                     </li>
                   ))}
                 </ol>
@@ -374,12 +538,12 @@ function DraftResults({
                 <p>Program outcomes</p>
                 <h2>What graduates can do</h2>
               </header>
-              {draft.pos.length ? (
+              {workingDraft.pos.length ? (
                 <ol className="draft-outcome-list">
-                  {draft.pos.map((po) => (
+                  {workingDraft.pos.map((po, index) => (
                     <li key={po.code}>
                       <Badge variant="outline">{po.code}</Badge>
-                      <p>{po.statement}</p>
+                      {editing ? <textarea aria-label={`${po.code} statement`} rows={3} value={po.statement} onChange={(event) => updateDefinition("pos", index, { statement: event.target.value })} /> : <p>{po.statement}</p>}
                     </li>
                   ))}
                 </ol>
@@ -430,7 +594,11 @@ function DraftResults({
                         );
                         return (
                           <TableCell key={code} className="draft-matrix__level">
-                            {level ?? "—"}
+                            {editing ? (
+                              <select aria-label={`Mapping ${outcome.courseCode} ${outcome.outcomeCode} to ${code}`} value={level ?? 0} onChange={(event) => updateMapping(outcome.courseCode, outcome.outcomeCode, code, Number(event.target.value))}>
+                                <option value={0}>Unmapped</option><option value={1}>1 · Low</option><option value={2}>2 · Moderate</option><option value={3}>3 · High</option>
+                              </select>
+                            ) : level ?? "—"}
                           </TableCell>
                         );
                       })}
@@ -463,7 +631,7 @@ function DraftResults({
               <label>Program<select name="program_id" required defaultValue=""><option value="" disabled>Select an existing program</option>{programs.map((program) => <option key={program.id} value={program.id}>{program.code} · {program.name}</option>)}</select></label>
               <label>Academic year<input name="academic_year" required placeholder="2026–2027" /></label>
               <label>Regulation<input name="regulation" required placeholder="R2026" /></label>
-              <label>Curriculum title<input name="title" defaultValue={draft.program.name ?? ""} /></label>
+              <label>Curriculum title<input name="title" defaultValue={workingDraft.program.name ?? ""} /></label>
             </div>
             <div className="draft-save__categories">
               <h3>Map generated course categories</h3>
@@ -471,7 +639,7 @@ function DraftResults({
             </div>
             {missingCreditCourses.length > 0 && <div className="draft-save__credits"><h3>Credits not provided in the draft</h3>{missingCreditCourses.map((course) => <label key={course.code}>{course.code} · {course.title}<input name={`credits:${course.code}`} type="number" min="0.5" max="30" step="0.5" defaultValue="3" required /></label>)}</div>}
             {saveError && <p className="draft-save__error" role="alert">{saveError}</p>}
-            <div className="draft-save__submit"><p>The save is all-or-nothing. Existing PEO/PO codes are versioned; curriculum and generated mappings stay in draft status.</p><Button type="submit" disabled={saveBusy || !programs.length || !courseTypes.length}>{saveBusy ? <><Spinner data-icon="inline-start" /> Saving curriculum…</> : "Save as curriculum draft"}</Button></div>
+            <div className="draft-save__submit"><p>The save is all-or-nothing. Existing PEO/PO codes are versioned; curriculum and generated mappings stay in draft status.{!canSave ? " Keep every course outcome mapped and assign a type to each category." : ""}</p><Button type="submit" disabled={saveBusy || !programs.length || !courseTypes.length || !canSave}>{saveBusy ? <><Spinner data-icon="inline-start" /> Saving curriculum…</> : "Save as curriculum draft"}</Button></div>
             {!programs.length && <p className="draft-save__error">Create a program in the curriculum workspace before saving this draft.</p>}
           </form>
         )}

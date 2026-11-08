@@ -23,7 +23,7 @@ This file tracks work still needed to complete the Curriculum Intelligence and V
 ### 4. Document-to-curriculum workflow
 - [ ] Complete the workflow from uploaded document and extracted content to a validated, editable curriculum draft.
 - [x] Add an explicit save action that persists the preview as curriculum/version 1.0 with courses, outcomes, PEOs, POs, and draft mappings.
-- [ ] Add in-place editing of generated draft content before save; currently users review the preview and supply curriculum metadata/category mapping.
+- [x] Add in-place editing of semester/course/CO/PEO/PO content and CO–PO mapping strength before save; backend validation remains authoritative.
 - Define handling for unsupported or scanned documents; OCR is currently unsupported.
 - Ensure ingestion and draft-generation failures are traceable and can be retried safely.
 

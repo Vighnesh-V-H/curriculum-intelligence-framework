@@ -104,6 +104,19 @@ claims about the source. Every course outcome must have at least one valid
 CO–PO mapping. Invalid or incomplete LLM output is reported as
 `503 llm_draft_failed` rather than as a client request error.
 
+## Draft preview editing
+
+The `/curriculum-drafts/new` preview includes an explicit edit mode before
+save. It supports edits to semester name/focus, course title/category/credits/
+summary, course-outcome statements, PEO/PO statements, and CO–PO mapping
+strengths. Course and outcome codes remain fixed to protect mapping references.
+Changing course categories requires selecting a course type for the new
+category. Removing the last mapping for any course outcome blocks save; the
+backend performs full schema/consistency validation and remains authoritative.
+The edited preview is submitted through the existing explicit save endpoint,
+which still persists all records transactionally as draft and never approves
+or publishes generated content.
+
 ## Frontend test workspace
 
 The authenticated `/curricula` page provides an operator-facing interface for

@@ -18,3 +18,14 @@
 .draft-save__success a { color: var(--primary); font-size: 12px; font-weight: 600; }
 @media (max-width: 720px) { .draft-save { grid-template-columns: 1fr; } }
 @media (max-width: 520px) { .draft-save__fields, .draft-save__categories, .draft-save__credits { grid-template-columns: 1fr; } .draft-save__submit { align-items: stretch; flex-direction: column; } }
+
+.draft-editing-note { margin: 0 0 18px; padding: 10px 12px; border-left: 2px solid var(--primary); color: var(--muted-foreground); background: color-mix(in srgb, var(--primary), var(--card) 96%); font-size: 12px; }
+.draft-course.is-editing label, .draft-program-summary, .draft-semester-edit-fields label { display: grid; gap: 5px; color: var(--muted-foreground); font-size: 10px; }
+.draft-course.is-editing input, .draft-course.is-editing textarea, .draft-program-summary textarea, .draft-semester-edit-fields input, .draft-semester-edit-fields textarea, .draft-outcome-list textarea, .draft-matrix__level select { width: 100%; min-width: 72px; padding: 7px 9px; border: 1px solid var(--input); border-radius: 5px; color: var(--foreground); background: var(--background); font: inherit; font-size: 12px; }
+.draft-course.is-editing .draft-course__name { display: grid; gap: 10px; }
+.draft-course.is-editing .draft-course__meta { display: grid; gap: 10px; }
+.draft-course__outcome-code { align-self: start; color: var(--primary); font-size: 11px; font-weight: 650; }
+.draft-course.is-editing .draft-course__outcomes li { align-items: start; }
+.draft-semester-edit-fields { display: grid; min-width: min(100%, 260px); gap: 8px; }
+.draft-outcome-list textarea { min-height: 74px; }
+.draft-matrix__level select { padding: 5px; }
