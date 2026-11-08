@@ -635,27 +635,14 @@ approved outcome versions are `DATE` because they represent academic
 effective dates, not instants. UUID keys allow the same identity to
 be used in the Neo4j curriculum graph.
 
-## 7. Neo4j Graph Mapping (planned)
+## 7. Neo4j Graph Mapping
 
-The relational schema is the system of record; the curriculum
-knowledge graph is projected into Neo4j for dependency and coverage
-analysis (FR-11, README knowledge graph model). Planned projection:
-
-| Relational source | Neo4j node/relationship |
-| --- | --- |
-| `courses` | `(:Course {id, code, name})` |
-| `semesters` | `(:Semester {id, number})` |
-| `course_outcomes` | `(:CourseOutcome {id, code})` |
-| `program_outcomes` | `(:ProgramOutcome {id, code})` |
-| `program_educational_objectives` | `(:PEO {id, code})` |
-| `course_prerequisites` | `(:Course)-[:PREREQUISITE_OF]->(:Course)` |
-| `co_po_mappings` | `(:CourseOutcome)-[:CONTRIBUTES_TO]->(:ProgramOutcome)` |
-| course → semester | `(:Course)-[:BELONGS_TO]->(:Semester)` |
-| PO → PEO support | `(:ProgramOutcome)-[:SUPPORTS]->(:PEO)` |
-
-Node keys use the same UUIDs as PostgreSQL. The graph is rebuilt per
-curriculum version. The Cypher constraints/indexes will be added with
-the graph module.
+The relational schema remains authoritative. The version-scoped graph
+projection, node/relationship catalog, status semantics, synchronization
+contract, and query boundaries are specified in
+[`knowledge-graph.md`](knowledge-graph.md). Neo4j is not a relational
+migration target; projection status/retry persistence, if implemented,
+will be added through a separate PostgreSQL Alembic migration.
 
 ## 8. Future Extensions (not yet covered by requirements)
 
