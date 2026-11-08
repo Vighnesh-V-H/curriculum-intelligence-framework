@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 from typing import Any, Literal
@@ -19,7 +21,7 @@ class FindingReferenceResponse(BaseModel):
     note: str | None
 
     @classmethod
-    def from_model(cls, reference: VerificationFindingReference) -> "FindingReferenceResponse":
+    def from_model(cls, reference: VerificationFindingReference) -> FindingReferenceResponse:
         return cls(
             id=reference.id,
             entity_type=reference.entity_type,
@@ -47,7 +49,7 @@ class FindingResponse(BaseModel):
     references: list[FindingReferenceResponse]
 
     @classmethod
-    def from_model(cls, finding: VerificationFinding) -> "FindingResponse":
+    def from_model(cls, finding: VerificationFinding) -> FindingResponse:
         return cls(
             id=finding.id,
             verification_run_id=finding.verification_run_id,
@@ -68,6 +70,21 @@ class FindingResponse(BaseModel):
                 FindingReferenceResponse.from_model(reference) for reference in finding.references
             ],
         )
+
+
+class VerificationReportGroup(BaseModel):
+    key: str
+    count: int
+    findings: list[FindingResponse]
+
+
+class VerificationReportResponse(BaseModel):
+    run: VerificationRunResponse
+    total_findings: int
+    groups: list[VerificationReportGroup]
+    counts_by_category: dict[str, int]
+    counts_by_severity: dict[str, int]
+    counts_by_review_status: dict[str, int]
 
 
 class FindingReviewRequest(BaseModel):
@@ -91,7 +108,7 @@ class VerificationRunResponse(BaseModel):
     summary: dict[str, Any] | None
 
     @classmethod
-    def from_model(cls, run: VerificationRun) -> "VerificationRunResponse":
+    def from_model(cls, run: VerificationRun) -> VerificationRunResponse:
         return cls(
             id=run.id,
             curriculum_version_id=run.curriculum_version_id,

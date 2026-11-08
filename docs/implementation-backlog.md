@@ -18,7 +18,7 @@ This file tracks work still needed to complete the Curriculum Intelligence and V
 ### 3. Finding review and reports
 - [x] Add authorized API operations to record finding review decisions and comments (accept, reject, or modify).
 - [x] Preserve reviewer identity, timestamps, and audit history.
-- Provide report-oriented API responses that group findings and summarize results by category and severity.
+- [x] Provide report API responses grouped by category, severity, or review status, with filtered counts.
 
 ### 4. Document-to-curriculum workflow
 - [ ] Complete the workflow from uploaded document and extracted content to a validated, editable curriculum draft.

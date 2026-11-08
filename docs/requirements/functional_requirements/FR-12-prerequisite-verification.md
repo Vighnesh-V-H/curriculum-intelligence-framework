@@ -138,6 +138,8 @@ The system shall support:
 - Filtering issues by type
 - Filtering issues by severity where configured
 - Viewing the affected course dependency chain
+- Viewing a report grouped by issue category, severity, or review status,
+  with counts for each dimension
 
 ---
 

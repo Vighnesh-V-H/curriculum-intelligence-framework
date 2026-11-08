@@ -1,4 +1,5 @@
 import uuid
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, status
 
@@ -11,6 +12,7 @@ from app.db.models.user import RoleCode, User
 from app.schemas.verification import (
     FindingResponse,
     FindingReviewRequest,
+    VerificationReportResponse,
     VerificationRunResponse,
 )
 from app.services.verification import VerificationService
@@ -57,6 +59,19 @@ def get_verification_run(
     service: VerificationService = Depends(get_verification_service),
 ) -> VerificationRunResponse:
     return service.get_run(run_id)
+
+
+@run_router.get("/{run_id}/report", response_model=VerificationReportResponse)
+def get_verification_report(
+    run_id: uuid.UUID,
+    group_by: Literal["category", "severity", "review_status"] = Query(default="category"),
+    category: str | None = Query(default=None),
+    severity: str | None = Query(default=None),
+    review_status: str | None = Query(default=None),
+    current_user: User = Depends(get_current_user),
+    service: VerificationService = Depends(get_verification_service),
+) -> VerificationReportResponse:
+    return service.get_report(run_id, group_by, category, severity, review_status)
 
 
 @run_router.get("/{run_id}/findings", response_model=list[FindingResponse])

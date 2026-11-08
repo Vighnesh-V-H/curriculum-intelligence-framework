@@ -1,9 +1,9 @@
 import logging
 import time
 import uuid
-from collections import deque
+from collections import Counter, deque
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -49,6 +49,8 @@ from app.repositories.verification import (
 )
 from app.schemas.verification import (
     FindingResponse,
+    VerificationReportGroup,
+    VerificationReportResponse,
     VerificationRunResponse,
 )
 
@@ -268,6 +270,41 @@ class VerificationService:
             FindingResponse.from_model(finding)
             for finding in self._findings.list_by_run(run_id, category, severity)
         ]
+
+    def get_report(
+        self,
+        run_id: uuid.UUID,
+        group_by: Literal["category", "severity", "review_status"] = "category",
+        category: str | None = None,
+        severity: str | None = None,
+        review_status: str | None = None,
+    ) -> VerificationReportResponse:
+        run = self._runs.get_by_id(run_id)
+        if run is None:
+            raise NotFoundError("Verification run not found")
+        findings = self._findings.list_by_run(run_id, category, severity)
+        if review_status is not None:
+            findings = [item for item in findings if item.review_status == review_status]
+
+        counts_by_category = Counter(item.category for item in findings)
+        counts_by_severity = Counter(item.severity for item in findings)
+        counts_by_review_status = Counter(item.review_status for item in findings)
+        grouped: dict[str, list[FindingResponse]] = {}
+        for finding in findings:
+            grouped.setdefault(getattr(finding, group_by), []).append(
+                FindingResponse.from_model(finding)
+            )
+        return VerificationReportResponse(
+            run=VerificationRunResponse.from_model(run),
+            total_findings=len(findings),
+            groups=[
+                VerificationReportGroup(key=key, count=len(group), findings=group)
+                for key, group in sorted(grouped.items())
+            ],
+            counts_by_category=dict(sorted(counts_by_category.items())),
+            counts_by_severity=dict(sorted(counts_by_severity.items())),
+            counts_by_review_status=dict(sorted(counts_by_review_status.items())),
+        )
 
     def get_finding(self, finding_id: uuid.UUID) -> FindingResponse:
         finding = self._findings.get_by_id(finding_id)

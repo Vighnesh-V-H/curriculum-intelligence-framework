@@ -69,6 +69,17 @@ def test_verification_reports_structure_outcomes_and_credit_summary(
     assert all(finding["review_status"] == "PENDING" for finding in findings)
     assert all(finding["evidence"] and finding["references"] for finding in findings)
 
+    report = client.get(
+        f"/api/v1/verification-runs/{run['id']}/report?group_by=severity",
+        headers=bearer(reviewer_token),
+    )
+    assert report.status_code == 200
+    report_body = report.json()
+    assert report_body["total_findings"] == 2
+    assert report_body["counts_by_category"] == {"OUTCOME": 1, "STRUCTURAL": 1}
+    assert report_body["counts_by_review_status"] == {"PENDING": 2}
+    assert {group["key"] for group in report_body["groups"]} == {"INFO", "MEDIUM"}
+
 
 def test_draft_mapping_does_not_count_as_approved_coverage(
     client, admin_token, reviewer_token, program

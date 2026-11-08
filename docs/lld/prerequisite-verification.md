@@ -43,10 +43,15 @@ specifies `JSONB` on PostgreSQL.
 | `GET` | same path | Authenticated |
 | `GET` | `/api/v1/verification-runs/{run_id}` | Authenticated |
 | `GET` | `/api/v1/verification-runs/{run_id}/findings` | Authenticated |
+| `GET` | `/api/v1/verification-runs/{run_id}/report` | Authenticated |
 | `GET` | `/api/v1/verification-findings/{finding_id}` | Authenticated |
 | `PATCH` | `/api/v1/verification-findings/{finding_id}/review` | `ADMIN`, `COMMITTEE_MEMBER`, `REVIEWER` |
 
-The findings list supports `category` and `severity` query filters.
+The findings list supports `category` and `severity` query filters. The report
+endpoint groups filtered findings by `category`, `severity`, or `review_status`
+(`group_by`, default `category`) and returns total counts across all three
+dimensions, plus the run summary. Optional `category`, `severity`, and
+`review_status` filters apply before grouping.
 
 ## Analysis (FR-12-01..05)
 
