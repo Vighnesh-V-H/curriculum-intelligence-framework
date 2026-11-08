@@ -113,7 +113,7 @@ export function WorkspaceNav({
             {onGenerate ? (
             <button className="topbar-generate" onClick={onGenerate} type="button" aria-label="Open curriculum draft studio">
               <Sparkles size={16} strokeWidth={1.9} />
-              <span className="text-gray-300">Open draft studio</span>
+              <span className="text-primary-foreground/80">Open draft studio</span>
             </button>
             ) : null}
           </div>

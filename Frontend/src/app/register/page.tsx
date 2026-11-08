@@ -62,13 +62,13 @@ export default function RegisterPage() {
           <span className="auth-aside-foot">Designed for better learning journeys.</span>
         </div>
         <div className="auth-form-wrap">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
           Create your workspace account
         </p>
-        <h1 className="mt-3 text-2xl font-semibold text-slate-900">
+        <h1 className="mt-3 text-2xl font-semibold text-foreground">
           Create your account
         </h1>
-        <p className="mt-2 text-sm text-slate-500">
+        <p className="mt-2 text-sm text-muted-foreground">
           Self-register with faculty access. Committee and reviewer roles are
           assigned by an administrator.
         </p>
@@ -76,7 +76,7 @@ export default function RegisterPage() {
         <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
           <div>
             <label
-              className="block text-sm font-medium text-slate-700"
+              className="block text-sm font-medium text-foreground"
               htmlFor="full_name"
             >
               Full name
@@ -88,14 +88,14 @@ export default function RegisterPage() {
               required
               value={fullName}
               onChange={(event) => setFullName(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+              className="mt-2 w-full rounded-lg border border-input px-3 py-2 text-foreground outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/30"
               placeholder="Faculty Name"
             />
           </div>
 
           <div>
             <label
-              className="block text-sm font-medium text-slate-700"
+              className="block text-sm font-medium text-foreground"
               htmlFor="username"
             >
               Username
@@ -109,14 +109,14 @@ export default function RegisterPage() {
               pattern="[A-Za-z0-9._-]+"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+              className="mt-2 w-full rounded-lg border border-input px-3 py-2 text-foreground outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/30"
               placeholder="faculty.name"
             />
           </div>
 
           <div>
             <label
-              className="block text-sm font-medium text-slate-700"
+              className="block text-sm font-medium text-foreground"
               htmlFor="email"
             >
               Email
@@ -129,14 +129,14 @@ export default function RegisterPage() {
               required
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+              className="mt-2 w-full rounded-lg border border-input px-3 py-2 text-foreground outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/30"
               placeholder="faculty.name@institution.edu"
             />
           </div>
 
           <div>
             <label
-              className="block text-sm font-medium text-slate-700"
+              className="block text-sm font-medium text-foreground"
               htmlFor="password"
             >
               Password
@@ -150,7 +150,7 @@ export default function RegisterPage() {
               minLength={8}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+              className="mt-2 w-full rounded-lg border border-input px-3 py-2 text-foreground outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/30"
               placeholder="At least 8 characters"
             />
           </div>
@@ -158,7 +158,7 @@ export default function RegisterPage() {
           {error ? (
             <p
               role="alert"
-              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+              className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
             >
               {error}
             </p>
@@ -167,17 +167,17 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading ? "Creating account…" : "Create account"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-slate-500">
+        <p className="mt-6 text-center text-sm text-muted-foreground">
           Already have an account?{" "}
           <Link
             href="/login"
-            className="font-semibold text-indigo-600 hover:text-indigo-500"
+            className="font-semibold text-primary hover:text-primary/80"
           >
             Sign in
           </Link>

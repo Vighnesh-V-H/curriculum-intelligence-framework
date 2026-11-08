@@ -8,12 +8,18 @@
 .academic-heading-actions > button { min-height: 38px; white-space: nowrap; }
 .academic-page input, .academic-page select, .academic-page textarea { min-width: 0; min-height: 38px; padding: 8px 10px; border: 1px solid var(--input); border-radius: 5px; color: var(--foreground); background: var(--card); font: inherit; font-size: 12px; }
 .academic-page textarea { resize: vertical; }
-.academic-page button { min-height: 36px; padding: 0 12px; border: 1px solid var(--primary); border-radius: 5px; color: var(--primary-foreground); background: var(--primary); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
-.academic-page button:disabled { cursor: not-allowed; opacity: .55; }
+.academic-page button { min-height: 36px; padding: 0 12px; border: 1px solid var(--primary); border-radius: 5px; color: var(--primary-foreground); background: var(--primary); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease, transform var(--press-duration) var(--ease-out-strong); }
+.academic-page button:hover { background: color-mix(in srgb, var(--primary), white 10%); }
+.academic-page button:active { transform: scale(0.97); }
+.academic-page button:disabled { cursor: not-allowed; opacity: .55; transition-duration: 0ms; }
 .academic-page button.academic-danger { border-color: color-mix(in srgb, var(--destructive), var(--border) 55%); color: var(--destructive); background: transparent; }
+.academic-page button.academic-danger:hover { background: color-mix(in srgb, var(--destructive), var(--card) 94%); }
 .academic-alert { margin: 12px 0; padding: 11px 13px; border: 1px solid color-mix(in srgb, var(--success), var(--border) 55%); border-radius: 5px; color: var(--foreground); background: color-mix(in srgb, var(--success), var(--card) 92%); font-size: 12px; }
 .academic-alert--error { border-color: color-mix(in srgb, var(--destructive), var(--border) 55%); background: color-mix(in srgb, var(--destructive), var(--card) 93%); }
-.academic-panel { min-width: 0; padding: clamp(17px, 2.5vw, 25px); border: 1px solid var(--border); border-radius: 7px; background: var(--card); }
+.academic-panel { min-width: 0; padding: clamp(17px, 2.5vw, 25px); border: 1px solid var(--border); border-radius: 7px; background: var(--card); transition: opacity var(--enter-duration) var(--ease-out-strong) backwards, transform var(--enter-duration) var(--ease-out-strong) backwards; }
+@starting-style {
+  .academic-panel { opacity: 0; transform: translateY(6px); }
+}
 .academic-panel h2 { margin: 0 0 15px; font: 400 21px/1.2 Georgia, "Times New Roman", serif; }
 .academic-panel > p { color: var(--muted-foreground); font-size: 12px; }
 .academic-create-form { margin-bottom: 20px; }
@@ -28,11 +34,15 @@
 .academic-summary strong { font-size: 12px; font-weight: 550; }
 .academic-summary label { min-width: 0; }
 .academic-tabs { display: flex; gap: 20px; margin-bottom: 16px; border-bottom: 1px solid var(--border); overflow-x: auto; }
-.academic-tabs button { min-height: 42px; flex: 0 0 auto; padding: 0 2px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: var(--muted-foreground); background: transparent; font-size: 12px; }
+.academic-tabs button { min-height: 42px; flex: 0 0 auto; padding: 0 2px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: var(--muted-foreground); background: transparent; font-size: 12px; cursor: pointer; transition: color 150ms var(--ease-out-strong), border-color 150ms var(--ease-out-strong), transform var(--press-duration) var(--ease-out-strong); }
+.academic-tabs button:hover { color: color-mix(in srgb, var(--foreground), var(--muted-foreground) 40%); }
 .academic-tabs button.is-active { border-bottom-color: var(--primary); color: var(--foreground); }
 .academic-workspace { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(260px, .7fr); align-items: start; gap: 15px; }
 .academic-list { display: grid; }
-.academic-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 14px 0; border-top: 1px solid var(--border); }
+.academic-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 14px 0; border-top: 1px solid var(--border); transition: opacity var(--enter-duration) var(--ease-out-strong) backwards, transform var(--enter-duration) var(--ease-out-strong) backwards; }
+@starting-style {
+  .academic-row { opacity: 0; transform: translateY(4px); }
+}
 .academic-row > div:first-child { min-width: 0; }
 .academic-row strong { font-size: 12px; font-weight: 550; line-height: 1.5; }
 .academic-row p { margin: 4px 0; color: var(--muted-foreground); font-size: 11px; }
