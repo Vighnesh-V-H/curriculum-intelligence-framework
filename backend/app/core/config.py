@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     llm_api_key: SecretStr | None = None
     llm_model: str = "gpt-4o-mini"
     llm_timeout_seconds: int = Field(default=120, gt=0)
+    neo4j_uri: str | None = None
+    neo4j_username: str = "neo4j"
+    neo4j_password: SecretStr | None = None
+    neo4j_database: str = "neo4j"
 
     @field_validator("log_level")
     @classmethod

@@ -641,8 +641,9 @@ The relational schema remains authoritative. The version-scoped graph
 projection, node/relationship catalog, status semantics, synchronization
 contract, and query boundaries are specified in
 [`knowledge-graph.md`](knowledge-graph.md). Neo4j is not a relational
-migration target; projection status/retry persistence, if implemented,
-will be added through a separate PostgreSQL Alembic migration.
+migration target. Current snapshot persistence is explicit; durable
+projection status/retry persistence remains planned and will be introduced
+through a PostgreSQL Alembic migration.
 
 ## 8. Future Extensions (not yet covered by requirements)
 

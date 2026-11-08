@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from neo4j import GraphDatabase
 
 from app.api.errors import register_exception_handlers
 from app.api.middleware import RequestLoggingMiddleware
@@ -21,6 +22,13 @@ async def lifespan(app: FastAPI):
         "Application startup began",
         extra={"app_name": settings.app_name, "environment": settings.environment},
     )
+    if settings.neo4j_uri:
+        auth = None
+        if settings.neo4j_password:
+            auth = (settings.neo4j_username, settings.neo4j_password.get_secret_value())
+        app.state.neo4j_driver = GraphDatabase.driver(settings.neo4j_uri, auth=auth)
+    else:
+        app.state.neo4j_driver = None
     try:
         bootstrap_admin()
     except Exception as exc:
@@ -38,6 +46,8 @@ async def lifespan(app: FastAPI):
         extra={"app_name": settings.app_name, "environment": settings.environment},
     )
     yield
+    if app.state.neo4j_driver is not None:
+        app.state.neo4j_driver.close()
     logger.info(
         "Application shutdown",
         extra={"app_name": settings.app_name, "environment": settings.environment},

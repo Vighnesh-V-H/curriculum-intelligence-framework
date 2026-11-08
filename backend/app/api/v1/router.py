@@ -6,6 +6,7 @@ from app.api.v1 import (
     curricula,
     curriculum_drafts,
     documents,
+    knowledge_graph,
     mappings,
     outcomes,
     prerequisites,
@@ -20,6 +21,7 @@ api_router.include_router(academic.router)
 api_router.include_router(curricula.router)
 api_router.include_router(curriculum_drafts.router)
 api_router.include_router(documents.router)
+api_router.include_router(knowledge_graph.router)
 api_router.include_router(outcomes.router)
 api_router.include_router(mappings.router)
 api_router.include_router(prerequisites.router)

@@ -117,9 +117,29 @@ patterns used by the query contract. Constraints/index setup is idempotent and
 runs as graph service initialization or a deployment migration, not as a side
 effect of ordinary API requests.
 
+## API and current synchronization status
+
+The authenticated endpoints are:
+
+| Method | Path | Access | Behavior |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/curricula/{curriculum_id}/versions/{version_id}/graph/rebuild` | curriculum writers | Replace the graph projection from a relational snapshot |
+| `GET` | `/api/v1/curricula/{curriculum_id}/versions/{version_id}/graph?limit=1000` | authenticated users | Return version-scoped nodes and relationships; `limit` is bounded to 1–5,000 |
+
+`NEO4J_URI` enables graph operations. `NEO4J_USERNAME`, `NEO4J_PASSWORD`,
+and `NEO4J_DATABASE` configure the driver. If Neo4j is not configured, graph
+requests return `503 graph_unavailable`; the application can still serve
+relational API requests.
+
+At this stage projection rebuild is explicit. Relational writes do not yet
+create durable projection jobs, so a graph may be stale after curriculum
+changes. Consumers must not treat graph reads as proof of current relational
+state. Durable outbox/retry and freshness reporting remain outstanding work
+tracked in `docs/implementation-backlog.md`.
+
 ## Query contract (initial)
 
-The first graph query API should be read-only and version-scoped, supporting:
+The read-only graph API is version-scoped, supporting:
 
 - list courses with semester and prerequisite adjacency;
 - dependency traversal with a bounded depth and cycle-safe query behavior;

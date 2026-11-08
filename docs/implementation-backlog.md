@@ -6,8 +6,9 @@ This file tracks work still needed to complete the Curriculum Intelligence and V
 
 ### 1. Knowledge graph
 - [x] Define and document the graph model for curriculum entities and relationships (`docs/lld/knowledge-graph.md`).
-- [ ] Implement graph persistence and queries (the current application stores curriculum data in PostgreSQL; Neo4j is not implemented).
-- [x] Define the relational/graph consistency and version-history strategy in the graph LLD; implementation remains part of graph persistence.
+- [x] Implement version-scoped Neo4j snapshot persistence and read queries through the authenticated graph API.
+- [x] Define the relational/graph consistency and version-history strategy in the graph LLD.
+- [ ] Add durable outbox/retry and projection-freshness tracking; graph rebuild is currently explicit and can become stale after relational edits.
 
 ### 2. Curriculum verification
 - Extend verification beyond prerequisite checks to include:

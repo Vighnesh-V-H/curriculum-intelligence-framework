@@ -5,7 +5,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.errors import ForbiddenError, UnauthorizedError
+from app.core.errors import ForbiddenError, ServiceUnavailableError, UnauthorizedError
 from app.core.logging_config import set_actor_id
 from app.core.security import (
     JwtService,
@@ -56,6 +56,8 @@ from app.services.curriculum import CurriculumService
 from app.services.curriculum_draft import CurriculumDraftService
 from app.services.curriculum_draft_persistence import CurriculumDraftPersistenceService
 from app.services.documents import DocumentProcessingService
+from app.services.knowledge_graph import KnowledgeGraphRepository
+from app.services.knowledge_graph_projection import KnowledgeGraphProjectionService
 from app.services.llm import LLMClient
 from app.services.llm import get_llm_client as build_llm_client
 from app.services.mappings import MappingService
@@ -319,6 +321,21 @@ def get_llm_client() -> LLMClient:
 
 def get_uploadthing_client() -> UploadThingClient | None:
     return build_uploadthing_client()
+
+
+def get_knowledge_graph_repository(request: Request) -> KnowledgeGraphRepository:
+    driver = getattr(request.app.state, "neo4j_driver", None)
+    if driver is None:
+        raise ServiceUnavailableError("Curriculum graph is not configured", "graph_unavailable")
+    settings = get_settings()
+    return KnowledgeGraphRepository(driver, settings.neo4j_database)
+
+
+def get_knowledge_graph_service(
+    session: Session = Depends(get_db),
+    graph: KnowledgeGraphRepository = Depends(get_knowledge_graph_repository),
+) -> KnowledgeGraphProjectionService:
+    return KnowledgeGraphProjectionService(session, graph)
 
 
 def get_document_service(
