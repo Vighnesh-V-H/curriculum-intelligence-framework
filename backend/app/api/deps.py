@@ -38,6 +38,7 @@ from app.repositories.documents import DocumentRepository
 from app.repositories.mappings import (
     CoPoMappingRepository,
     CoPoMappingVersionRepository,
+    CurriculumVersionPeoRepository,
     CurriculumVersionProgramOutcomeRepository,
     MappingLevelRepository,
 )
@@ -53,6 +54,7 @@ from app.services.academic import AcademicService
 from app.services.auth import AuthService
 from app.services.curriculum import CurriculumService
 from app.services.curriculum_draft import CurriculumDraftService
+from app.services.curriculum_draft_persistence import CurriculumDraftPersistenceService
 from app.services.documents import DocumentProcessingService
 from app.services.llm import LLMClient
 from app.services.llm import get_llm_client as build_llm_client
@@ -340,6 +342,58 @@ def get_curriculum_draft_service(
     llm_client: LLMClient = Depends(get_llm_client),
 ) -> CurriculumDraftService:
     return CurriculumDraftService(llm_client, get_settings())
+
+
+def get_curriculum_version_peo_repository(
+    session: Session = Depends(get_db),
+) -> CurriculumVersionPeoRepository:
+    return CurriculumVersionPeoRepository(session)
+
+
+def get_curriculum_draft_persistence_service(
+    session: Session = Depends(get_db),
+    programs: ProgramRepository = Depends(get_program_repository),
+    course_types: CourseTypeRepository = Depends(get_course_type_repository),
+    curricula: CurriculumRepository = Depends(get_curriculum_repository),
+    versions: CurriculumVersionRepository = Depends(get_curriculum_version_repository),
+    semesters: SemesterRepository = Depends(get_semester_repository),
+    courses: CourseRepository = Depends(get_course_repository),
+    course_outcomes: CourseOutcomeRepository = Depends(get_course_outcome_repository),
+    program_outcomes: OutcomeRepository = Depends(get_program_outcome_repository),
+    program_outcome_versions: OutcomeVersionRepository = Depends(
+        get_program_outcome_version_repository
+    ),
+    peos: OutcomeRepository = Depends(get_peo_repository),
+    peo_versions: OutcomeVersionRepository = Depends(get_peo_version_repository),
+    mapping_levels: MappingLevelRepository = Depends(get_mapping_level_repository),
+    version_outcomes: CurriculumVersionProgramOutcomeRepository = Depends(
+        get_curriculum_version_outcome_repository
+    ),
+    version_peos: CurriculumVersionPeoRepository = Depends(get_curriculum_version_peo_repository),
+    mappings: CoPoMappingRepository = Depends(get_mapping_repository),
+    mapping_versions: CoPoMappingVersionRepository = Depends(get_mapping_version_repository),
+    audit_logs: AuditLogRepository = Depends(get_audit_log_repository),
+) -> CurriculumDraftPersistenceService:
+    return CurriculumDraftPersistenceService(
+        session,
+        programs,
+        course_types,
+        curricula,
+        versions,
+        semesters,
+        courses,
+        course_outcomes,
+        program_outcomes,
+        program_outcome_versions,
+        peos,
+        peo_versions,
+        mapping_levels,
+        version_outcomes,
+        version_peos,
+        mappings,
+        mapping_versions,
+        audit_logs,
+    )
 
 
 def get_verification_service(

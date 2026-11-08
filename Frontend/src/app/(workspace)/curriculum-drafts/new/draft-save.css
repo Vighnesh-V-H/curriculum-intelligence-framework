@@ -1,0 +1,20 @@
+.draft-save { display: grid; grid-template-columns: minmax(220px, .55fr) minmax(0, 1.45fr); gap: clamp(22px, 5vw, 62px); margin-top: 25px; padding: clamp(20px, 3vw, 34px); border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
+.draft-save__intro > p { margin: 0 0 9px; color: var(--primary); font-size: 11px; font-weight: 600; }
+.draft-save__intro h2 { margin: 0; font: 400 clamp(23px, 2.7vw, 30px)/1.15 Georgia, "Times New Roman", serif; letter-spacing: -.03em; }
+.draft-save__intro > span { display: block; margin-top: 10px; color: var(--muted-foreground); font-size: 11px; line-height: 1.6; }
+.draft-save__form { min-width: 0; }
+.draft-save__fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.draft-save__fields label, .draft-save__categories label, .draft-save__credits label { display: grid; gap: 5px; color: var(--muted-foreground); font-size: 10px; }
+.draft-save__fields input, .draft-save__fields select, .draft-save__categories select, .draft-save__credits input { min-height: 38px; padding: 7px 9px; border: 1px solid var(--input); border-radius: 5px; color: var(--foreground); background: var(--background); font: inherit; font-size: 11px; }
+.draft-save__categories, .draft-save__credits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 20px; }
+.draft-save__categories h3, .draft-save__credits h3 { grid-column: 1 / -1; margin: 0; color: var(--foreground); font-size: 11px; font-weight: 600; }
+.draft-save__submit { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+.draft-save__submit p { max-width: 420px; margin: 0; color: var(--muted-foreground); font-size: 10px; line-height: 1.55; }
+.draft-save__submit [data-slot="button"] { flex: 0 0 auto; }
+.draft-save__error { color: var(--destructive); font-size: 11px; }
+.draft-save__success { align-self: center; padding: 16px; border-left: 2px solid var(--success); background: color-mix(in srgb, var(--success), var(--card) 94%); }
+.draft-save__success strong { font-size: 13px; }
+.draft-save__success p { color: var(--muted-foreground); font-size: 11px; }
+.draft-save__success a { color: var(--primary); font-size: 12px; font-weight: 600; }
+@media (max-width: 720px) { .draft-save { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .draft-save__fields, .draft-save__categories, .draft-save__credits { grid-template-columns: 1fr; } .draft-save__submit { align-items: stretch; flex-direction: column; } }

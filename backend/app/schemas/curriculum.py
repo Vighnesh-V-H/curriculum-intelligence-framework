@@ -19,6 +19,7 @@ class CurriculumCreate(BaseModel):
     academic_year: str = Field(min_length=1, max_length=20)
     regulation: str = Field(min_length=1, max_length=50)
     title: str | None = Field(default=None, max_length=200)
+    description: str | None = None
     duration_years: float = Field(gt=0, le=10)
     semesters: list[SemesterCreate] = Field(min_length=1)
     courses: list[CourseCreate] = Field(default_factory=list)
@@ -58,6 +59,7 @@ class CurriculumUpdate(BaseModel):
     academic_year: str | None = Field(default=None, min_length=1, max_length=20)
     regulation: str | None = Field(default=None, min_length=1, max_length=50)
     title: str | None = Field(default=None, max_length=200)
+    description: str | None = None
     duration_years: float | None = Field(default=None, gt=0, le=10)
 
     @field_validator("academic_year", "regulation")
@@ -99,6 +101,7 @@ class CurriculumResponse(BaseModel):
     academic_year: str
     regulation: str
     title: str | None
+    description: str | None
     duration_years: float
     status: str
     created_by: uuid.UUID
@@ -120,6 +123,7 @@ class CurriculumResponse(BaseModel):
             academic_year=curriculum.academic_year,
             regulation=curriculum.regulation,
             title=curriculum.title,
+            description=curriculum.description,
             duration_years=float(curriculum.duration_years),
             status=curriculum.status,
             created_by=curriculum.created_by,
@@ -138,6 +142,7 @@ def semester_response(semester: Semester) -> SemesterResponse:
         id=semester.id,
         semester_number=semester.semester_number,
         name=semester.name,
+        focus=semester.focus,
     )
 
 

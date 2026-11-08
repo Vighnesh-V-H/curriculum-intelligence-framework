@@ -438,6 +438,20 @@ export const api = {
       body: form,
     });
   },
+  saveCurriculumDraft(payload: {
+    program_id: string;
+    academic_year: string;
+    regulation: string;
+    title?: string | null;
+    course_type_codes: Record<string, string>;
+    credits_by_course_code: Record<string, number>;
+    draft: CurriculumDraft;
+  }): Promise<Curriculum & { versions: CurriculumVersion[] }> {
+    return request("/api/v1/curriculum-drafts/save", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
 };
 
 export function getStoredToken(): string | null {

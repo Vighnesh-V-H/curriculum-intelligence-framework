@@ -2,6 +2,8 @@ import io
 from typing import Any
 
 from app.api.deps import get_llm_client
+from app.db.models.mappings import MappingLevel
+from app.db.session import SessionLocal
 from app.services.llm import LLMNotConfiguredError, LLMResponseError
 from tests.conftest import bearer
 
@@ -26,17 +28,13 @@ def override_llm(client, stub):
 
 
 def release_llm(client):
-    client.app.dependency_overrides.pop(
-        get_llm_client, None
-    )
+    client.app.dependency_overrides.pop(get_llm_client, None)
 
 
 def generate(client, token, entries: list[tuple[str, bytes]]) -> Any:
     return client.post(
         "/api/v1/curriculum-drafts",
-        files=[
-            ("files", (name, content, "text/plain")) for name, content in entries
-        ],
+        files=[("files", (name, content, "text/plain")) for name, content in entries],
         headers=bearer(token) if token else None,
     )
 
@@ -178,7 +176,9 @@ def make_minimal_pdf(text: str) -> bytes:
             b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
             b"/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n"
         ),
-        b"4 0 obj\n<< /Length " + str(len(content)).encode() + b" >>\nstream\n"
+        b"4 0 obj\n<< /Length "
+        + str(len(content)).encode()
+        + b" >>\nstream\n"
         + content
         + b"\nendstream\nendobj\n",
         b"5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
@@ -210,15 +210,11 @@ def test_draft_generation_requires_authentication(client):
 
 
 def test_reviewer_cannot_generate_draft(client, reviewer_token):
-    response = generate(
-        client, reviewer_token, [("syllabus.txt", b"CS101 syllabus")]
-    )
+    response = generate(client, reviewer_token, [("syllabus.txt", b"CS101 syllabus")])
     assert response.status_code == 403
 
 
-def test_committee_member_and_admin_can_generate(
-    client, committee_token, admin_token
-):
+def test_committee_member_and_admin_can_generate(client, committee_token, admin_token):
     for token in (committee_token, admin_token):
         stub = StubDraftLLMClient()
         override_llm(client, stub)
@@ -264,9 +260,7 @@ def test_generate_rejects_empty_file(client, faculty_token):
 
 
 def test_generate_rejects_oversized_file(client, faculty_token):
-    response = generate(
-        client, faculty_token, [("big.txt", b"x" * (1024 * 1024 + 1))]
-    )
+    response = generate(client, faculty_token, [("big.txt", b"x" * (1024 * 1024 + 1))])
     assert response.status_code == 413
     assert response.json()["error"]["code"] == "file_too_large"
 
@@ -312,8 +306,7 @@ def test_generate_returns_draft_from_single_text_document(client, faculty_token)
             [
                 (
                     "syllabus.txt",
-                    b"B.Tech CSE regulation 2026. Semester 1: CS101 Programming "
-                    b"Fundamentals.",
+                    b"B.Tech CSE regulation 2026. Semester 1: CS101 Programming Fundamentals.",
                 )
             ],
         )
@@ -332,8 +325,7 @@ def test_generate_returns_draft_from_single_text_document(client, faculty_token)
     assert len(body["mappings"]) == 6
     assert all(mapping["level"] in (1, 2, 3) for mapping in body["mappings"])
     assert any(
-        mapping["course_code"] == "CS101"
-        and mapping["program_outcome_code"] == "PO1"
+        mapping["course_code"] == "CS101" and mapping["program_outcome_code"] == "PO1"
         for mapping in body["mappings"]
     )
     assert stub.calls == [
@@ -371,6 +363,86 @@ def test_generate_combines_multiple_documents(client, faculty_token):
     ]
 
 
+def test_save_reviewed_draft_persists_normalized_curriculum(client, faculty_token, program):
+    with SessionLocal() as session:
+        for number in (1, 2, 3):
+            session.add(
+                MappingLevel(
+                    code=f"LEVEL_{number}",
+                    name=f"Level {number}",
+                    numeric_value=number,
+                    is_active=True,
+                )
+            )
+        session.commit()
+
+    response = client.post(
+        "/api/v1/curriculum-drafts/save",
+        headers=bearer(faculty_token),
+        json={
+            "program_id": program["id"],
+            "academic_year": "2026-27",
+            "regulation": "AI-2026",
+            "title": "AI-reviewed CSE curriculum",
+            "course_type_codes": {
+                "foundation": "CORE",
+                "core": "CORE",
+                "lab": "LAB",
+            },
+            "credits_by_course_code": {},
+            "draft": make_draft_payload(),
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["description"] == make_draft_payload()["program"]["summary"]
+    version = body["versions"][0]
+    assert version["status"] == "DRAFT"
+    assert len(version["semesters"]) == 2
+    assert version["semesters"][0]["focus"] == "Foundations"
+    assert len(version["courses"]) == 4
+
+    course = version["courses"][0]
+    outcomes = client.get(
+        f"/api/v1/curricula/{body['id']}/versions/{version['id']}/courses/{course['id']}/outcomes",
+        headers=bearer(faculty_token),
+    )
+    mappings = client.get(
+        f"/api/v1/curricula/{body['id']}/versions/{version['id']}/mappings",
+        headers=bearer(faculty_token),
+    )
+    assert outcomes.status_code == 200
+    assert len(outcomes.json()) >= 1
+    assert mappings.status_code == 200
+    assert len(mappings.json()) == 6
+    assert all(row["current_version"]["status"] == "DRAFT" for row in mappings.json())
+
+    pos = client.get(
+        f"/api/v1/programs/{program['id']}/program-outcomes", headers=bearer(faculty_token)
+    )
+    peos = client.get(f"/api/v1/programs/{program['id']}/peos", headers=bearer(faculty_token))
+    assert len(pos.json()) == 5
+    assert len(peos.json()) == 3
+    assert all(row["current_version"]["status"] == "DRAFT" for row in pos.json())
+    assert all(row["current_version"]["status"] == "DRAFT" for row in peos.json())
+
+
+def test_save_draft_requires_type_for_each_category(client, faculty_token, program):
+    response = client.post(
+        "/api/v1/curriculum-drafts/save",
+        headers=bearer(faculty_token),
+        json={
+            "program_id": program["id"],
+            "academic_year": "2026-27",
+            "regulation": "AI-2026",
+            "course_type_codes": {"foundation": "CORE"},
+            "draft": make_draft_payload(),
+        },
+    )
+    assert response.status_code == 422
+
+
 def test_generate_supports_pdf_files(client, faculty_token):
     stub = StubDraftLLMClient()
     override_llm(client, stub)
@@ -393,12 +465,7 @@ def test_generate_supports_pdf_files(client, faculty_token):
         release_llm(client)
 
     assert response.status_code == 200
-    assert stub.calls == [
-        (
-            "= File: regulation.pdf =\n"
-            "CS101 Programming Fundamentals syllabus"
-        )
-    ]
+    assert stub.calls == [("= File: regulation.pdf =\nCS101 Programming Fundamentals syllabus")]
 
 
 # ------------------------------------------------------------- llm errors
@@ -418,9 +485,7 @@ def test_generate_rejects_invalid_llm_payload(client, faculty_token):
     assert "invalid" in body["error"]["message"].lower()
 
 
-def test_generate_rejects_draft_without_program_outcomes_or_mappings(
-    client, faculty_token
-):
+def test_generate_rejects_draft_without_program_outcomes_or_mappings(client, faculty_token):
     payload = make_draft_payload()
     payload["pos"] = []
     payload["mappings"] = []
@@ -447,9 +512,7 @@ def test_generate_llm_failure_returns_service_unavailable(client, faculty_token)
     assert response.json()["error"]["code"] == "llm_draft_failed"
 
 
-def test_generate_without_llm_configuration_returns_service_unavailable(
-    client, faculty_token
-):
+def test_generate_without_llm_configuration_returns_service_unavailable(client, faculty_token):
     stub = StubDraftLLMClient(error=LLMNotConfiguredError())
     override_llm(client, stub)
     try:

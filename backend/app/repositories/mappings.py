@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.db.models.mappings import (
     CoPoMapping,
     CoPoMappingVersion,
+    CurriculumVersionPeo,
     CurriculumVersionProgramOutcome,
     MappingLevel,
     MappingStatus,
@@ -48,6 +49,16 @@ class CurriculumVersionProgramOutcomeRepository:
         )
 
     def add(self, pin: CurriculumVersionProgramOutcome) -> CurriculumVersionProgramOutcome:
+        self._session.add(pin)
+        self._session.flush()
+        return pin
+
+
+class CurriculumVersionPeoRepository:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def add(self, pin: CurriculumVersionPeo) -> CurriculumVersionPeo:
         self._session.add(pin)
         self._session.flush()
         return pin

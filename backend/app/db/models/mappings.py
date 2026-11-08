@@ -7,6 +7,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     SmallInteger,
@@ -20,7 +21,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.db.models.academic import CourseOutcome
-from app.db.models.outcomes import ProgramOutcome
+from app.db.models.outcomes import ProgramEducationalObjective, ProgramOutcome
 from app.db.models.user import utc_now
 
 
@@ -54,6 +55,13 @@ class MappingLevel(Base):
 
 class CurriculumVersionProgramOutcome(Base):
     __tablename__ = "curriculum_version_program_outcomes"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["program_outcome_version_id", "program_outcome_id"],
+            ["program_outcome_versions.id", "program_outcome_versions.program_outcome_id"],
+            name="fk_cvpo_version",
+        ),
+    )
 
     curriculum_version_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
@@ -72,6 +80,31 @@ class CurriculumVersionProgramOutcome(Base):
     )
 
     program_outcome: Mapped[ProgramOutcome] = relationship(lazy="joined")
+
+
+class CurriculumVersionPeo(Base):
+    __tablename__ = "curriculum_version_peos"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["peo_version_id", "peo_id"],
+            ["peo_versions.id", "peo_versions.peo_id"],
+            name="fk_cvpeo_version",
+        ),
+    )
+
+    curriculum_version_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("curriculum_versions.id", ondelete="CASCADE"), primary_key=True
+    )
+    peo_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("program_educational_objectives.id"), primary_key=True
+    )
+    peo_version_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    added_by: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
+    added_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+    peo: Mapped[ProgramEducationalObjective] = relationship(lazy="joined")
 
 
 class CoPoMapping(Base):

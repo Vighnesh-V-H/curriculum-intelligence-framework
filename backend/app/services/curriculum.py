@@ -82,6 +82,7 @@ def _curriculum_snapshot(curriculum: Curriculum) -> dict[str, Any]:
         "academic_year": curriculum.academic_year,
         "regulation": curriculum.regulation,
         "title": curriculum.title,
+        "description": curriculum.description,
         "duration_years": float(curriculum.duration_years),
         "status": curriculum.status,
     }
@@ -131,6 +132,7 @@ class CurriculumService:
             academic_year=request.academic_year,
             regulation=request.regulation,
             title=request.title,
+            description=request.description,
             duration_years=request.duration_years,
             status=CurriculumStatus.ACTIVE.value,
             created_by=actor_id,
@@ -152,6 +154,7 @@ class CurriculumService:
                     curriculum_version_id=version.id,
                     semester_number=semester_request.semester_number,
                     name=semester_request.name,
+                    focus=semester_request.focus,
                 )
                 self._semesters.add(semester)
                 semesters[semester.semester_number] = semester
@@ -263,7 +266,7 @@ class CurriculumService:
                 )
 
         old_values = _curriculum_snapshot(curriculum)
-        for field in ("academic_year", "regulation", "title", "duration_years"):
+        for field in ("academic_year", "regulation", "title", "description", "duration_years"):
             if field in changes:
                 setattr(curriculum, field, getattr(request, field))
 

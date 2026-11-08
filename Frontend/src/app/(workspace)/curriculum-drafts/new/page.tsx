@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import "./draft-save.css";
+import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, DragEvent, FormEvent } from "react";
 import Link from "next/link";
 import {
@@ -37,7 +38,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ApiError, api } from "@/lib/api";
-import type { CurriculumDraft, DraftCourse, DraftSemester } from "@/lib/api";
+import type { CourseType, CurriculumDraft, DraftCourse, DraftSemester, Program } from "@/lib/api";
 
 const ALLOWED_EXTENSIONS = [".pdf", ".docx", ".txt", ".md", ".csv"];
 const MAX_FILE_MB = 20;
@@ -139,6 +140,58 @@ function DraftResults({
   onStartOver: () => void;
 }) {
   const [view, setView] = useState<DraftView>("roadmap");
+  const [programs, setPrograms] = useState<Program[]>([]);
+  const [courseTypes, setCourseTypes] = useState<CourseType[]>([]);
+  const [courseTypeCodes, setCourseTypeCodes] = useState<Record<string, string>>({});
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [savedCurriculumId, setSavedCurriculumId] = useState("");
+  const categories = [...new Set(draft.semesters.flatMap((semester) => semester.courses.map((course) => course.category.trim().toLowerCase())))];
+  const missingCreditCourses = draft.semesters.flatMap((semester) => semester.courses).filter((course) => course.credits === null);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([api.listPrograms(), api.listCourseTypes()])
+      .then(([programRows, typeRows]) => {
+        if (cancelled) return;
+        setPrograms(programRows);
+        setCourseTypes(typeRows);
+        const codes = Object.fromEntries(categories.map((category) => {
+          const matched = typeRows.find((type) => type.code.toLowerCase() === category)
+            ?? typeRows.find((type) => category.includes(type.code.toLowerCase()) || type.name.toLowerCase().includes(category))
+            ?? typeRows.find((type) => type.code === "CORE");
+          return [category, matched?.code ?? typeRows[0]?.code ?? ""];
+        }));
+        setCourseTypeCodes(codes);
+      })
+      .catch((caught) => setSaveError(caught instanceof ApiError ? caught.message : "Could not load programs and course types."));
+    return () => { cancelled = true; };
+  // Categories are immutable for this generated result.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function saveDraft(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const credits = Object.fromEntries(missingCreditCourses.map((course) => [
+      course.code.toUpperCase(), Number(form.get(`credits:${course.code}`)),
+    ]));
+    setSaveBusy(true); setSaveError("");
+    try {
+      const saved = await api.saveCurriculumDraft({
+        program_id: String(form.get("program_id")),
+        academic_year: String(form.get("academic_year")),
+        regulation: String(form.get("regulation")),
+        title: String(form.get("title") || "") || null,
+        course_type_codes: courseTypeCodes,
+        credits_by_course_code: credits,
+        draft,
+      });
+      setSavedCurriculumId(saved.id);
+    } catch (caught) {
+      setSaveError(caught instanceof ApiError ? caught.message : "Could not save the curriculum draft.");
+    } finally { setSaveBusy(false); }
+  }
   const [selectedSemester, setSelectedSemester] = useState(
     draft.semesters[0]?.semester_number ?? 1,
   );
@@ -392,9 +445,39 @@ function DraftResults({
         </section>
       )}
 
+      <section className="draft-save" aria-labelledby="draft-save-title">
+        <div className="draft-save__intro">
+          <p>Reviewed draft</p>
+          <h2 id="draft-save-title">Save this as a curriculum</h2>
+          <span>Saving creates curriculum version 1.0 as a draft. Generated PEOs, POs, and mappings remain unapproved for academic review.</span>
+        </div>
+        {savedCurriculumId ? (
+          <div className="draft-save__success" role="status">
+            <strong>Curriculum draft saved.</strong>
+            <p>It is stored as version 1.0 in draft status; nothing was approved or published.</p>
+            <Link href="/curricula">Open curriculum workspace</Link>
+          </div>
+        ) : (
+          <form className="draft-save__form" onSubmit={saveDraft}>
+            <div className="draft-save__fields">
+              <label>Program<select name="program_id" required defaultValue=""><option value="" disabled>Select an existing program</option>{programs.map((program) => <option key={program.id} value={program.id}>{program.code} · {program.name}</option>)}</select></label>
+              <label>Academic year<input name="academic_year" required placeholder="2026–2027" /></label>
+              <label>Regulation<input name="regulation" required placeholder="R2026" /></label>
+              <label>Curriculum title<input name="title" defaultValue={draft.program.name ?? ""} /></label>
+            </div>
+            <div className="draft-save__categories">
+              <h3>Map generated course categories</h3>
+              {categories.map((category) => <label key={category}>{category}<select value={courseTypeCodes[category] ?? ""} onChange={(event) => setCourseTypeCodes((current) => ({ ...current, [category]: event.target.value }))} required><option value="" disabled>Select course type</option>{courseTypes.map((type) => <option key={type.code} value={type.code}>{type.name} ({type.code})</option>)}</select></label>)}
+            </div>
+            {missingCreditCourses.length > 0 && <div className="draft-save__credits"><h3>Credits not provided in the draft</h3>{missingCreditCourses.map((course) => <label key={course.code}>{course.code} · {course.title}<input name={`credits:${course.code}`} type="number" min="0.5" max="30" step="0.5" defaultValue="3" required /></label>)}</div>}
+            {saveError && <p className="draft-save__error" role="alert">{saveError}</p>}
+            <div className="draft-save__submit"><p>The save is all-or-nothing. Existing PEO/PO codes are versioned; curriculum and generated mappings stay in draft status.</p><Button type="submit" disabled={saveBusy || !programs.length || !courseTypes.length}>{saveBusy ? <><Spinner data-icon="inline-start" /> Saving curriculum…</> : "Save as curriculum draft"}</Button></div>
+            {!programs.length && <p className="draft-save__error">Create a program in the curriculum workspace before saving this draft.</p>}
+          </form>
+        )}
+      </section>
       <p className="draft-results__note">
-        This is an AI-generated preview, not a saved curriculum. Review every course and mapping
-        before using it in your program.
+        Review the generated curriculum carefully. Saving requires an explicit confirmation and creates an editable draft; it does not approve or publish the proposal.
       </p>
     </div>
   );

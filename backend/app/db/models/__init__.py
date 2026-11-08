@@ -21,6 +21,7 @@ from app.db.models.document import Document, DocumentStatus
 from app.db.models.mappings import (
     CoPoMapping,
     CoPoMappingVersion,
+    CurriculumVersionPeo,
     CurriculumVersionProgramOutcome,
     MappingLevel,
     MappingStatus,
@@ -59,6 +60,7 @@ __all__ = [
     "Curriculum",
     "CurriculumStatus",
     "CurriculumVersion",
+    "CurriculumVersionPeo",
     "CurriculumVersionProgramOutcome",
     "Department",
     "DepartmentStatus",

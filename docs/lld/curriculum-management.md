@@ -29,7 +29,8 @@ All endpoints require a JWT bearer token.
 | Method | Path | Description |
 | --- | --- | --- |
 | `POST` | `/api/v1/curricula` | Create a curriculum with initial draft version `1.0` |
-| `POST` | `/api/v1/curriculum-drafts` | Generate a non-persistent AI draft from 1-5 uploaded documents |
+| `POST` | `/api/v1/curriculum-drafts` | Generate an AI draft from 1-5 uploaded documents (preview only) |
+| `POST` | `/api/v1/curriculum-drafts/save` | Explicitly save a reviewed draft as a normalized curriculum and initial draft version |
 | `GET` | `/api/v1/curricula` | List curricula with latest version summary |
 | `GET` | `/api/v1/curricula/{curriculum_id}` | Get curriculum with all versions |
 | `PATCH` | `/api/v1/curricula/{curriculum_id}` | Update curriculum metadata |
@@ -87,13 +88,21 @@ roadmap-style draft from the configured LLM. Draft completions allow up to
 16,384 output tokens by default and use 32,768 for Gemini 2.5 models, avoiding
 truncation of larger semester, outcome, and mapping data.
 
-The returned draft is advisory and is not persisted or converted into
-curriculum, course, PEO, PO, or mapping records. If uploaded material omits
-PEOs or POs, the LLM proposes suitable baseline outcomes; these remain
-suggestions for a user to review, not claims about the source. Every course
-outcome must have at least one valid CO-PO mapping. Invalid or incomplete LLM
-output is reported as `503 llm_draft_failed` rather than as a client request
-error.
+Generation returns an advisory preview and does not persist it. A separate
+explicit save action accepts the reviewed draft, selected program, academic
+year, regulation, title, and a mapping from generated course categories to
+active course types. Saving creates the curriculum, version `1.0` (`DRAFT`),
+semesters, courses, course outcomes, PEO/PO versions (`DRAFT`), version pins,
+and CO–PO mappings with draft mapping versions in one database transaction.
+The operation never approves or publishes generated content. Existing
+program-level PEO/PO codes reuse an exactly matching outcome version; changed
+statements create a new draft outcome version. Invalid mappings or database
+conflicts reject the whole save without leaving partial records. Courses whose
+credit count is absent from the generated payload require a user-provided value. The returned draft is advisory; if uploaded material
+omits PEOs or POs, the LLM proposes baseline suggestions for human review, not
+claims about the source. Every course outcome must have at least one valid
+CO–PO mapping. Invalid or incomplete LLM output is reported as
+`503 llm_draft_failed` rather than as a client request error.
 
 ## Frontend test workspace
 

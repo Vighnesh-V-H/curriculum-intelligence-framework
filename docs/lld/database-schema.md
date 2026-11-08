@@ -142,6 +142,7 @@ version history.
 | `academic_year` | VARCHAR(20) | e.g. `2026-27` |
 | `regulation` | VARCHAR(50) | unique per program |
 | `title` | VARCHAR(200) | nullable |
+| `description` | TEXT | nullable; generated program summary |
 | `duration_years` | NUMERIC(3,1) | `> 0` |
 | `status` | VARCHAR(20) | `ACTIVE`, `ARCHIVED` |
 | `created_by` | UUID FK → `users` | not null |
@@ -188,6 +189,7 @@ DRAFT -> UNDER_REVIEW -> APPROVED -> PUBLISHED -> ARCHIVED
 | `curriculum_version_id` | UUID FK → `curriculum_versions` | cascade delete |
 | `semester_number` | SMALLINT | unique per version, `> 0` |
 | `name` | VARCHAR(100) | nullable |
+| `focus` | TEXT | nullable; generated semester focus |
 | `created_at` | TIMESTAMPTZ | not null |
 
 `UNIQUE (id, curriculum_version_id)` exists so that child tables can

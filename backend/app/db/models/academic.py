@@ -118,6 +118,7 @@ class Curriculum(Base):
     academic_year: Mapped[str] = mapped_column(String(20), nullable=False)
     regulation: Mapped[str] = mapped_column(String(50), nullable=False)
     title: Mapped[str | None] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text)
     duration_years: Mapped[Decimal] = mapped_column(Numeric(3, 1), nullable=False)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default=CurriculumStatus.ACTIVE.value
@@ -196,6 +197,7 @@ class Semester(Base):
     )
     semester_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     name: Mapped[str | None] = mapped_column(String(100))
+    focus: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )

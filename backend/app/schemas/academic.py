@@ -109,8 +109,9 @@ class CourseTypeResponse(BaseModel):
 class SemesterCreate(BaseModel):
     semester_number: int = Field(gt=0, le=30)
     name: str | None = Field(default=None, max_length=100)
+    focus: str | None = None
 
-    @field_validator("name")
+    @field_validator("name", "focus")
     @classmethod
     def normalize_name(cls, value: str | None) -> str | None:
         return value.strip() if value is not None else None
@@ -120,3 +121,4 @@ class SemesterResponse(BaseModel):
     id: uuid.UUID
     semester_number: int
     name: str | None
+    focus: str | None

@@ -65,6 +65,7 @@ class ProgramOutcomeVersion(Base):
         UniqueConstraint(
             "program_outcome_id", "version_number", name="uq_program_outcome_versions"
         ),
+        UniqueConstraint("id", "program_outcome_id", name="uq_program_outcome_versions_id_po"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -119,7 +120,10 @@ class ProgramEducationalObjective(Base):
 
 class PeoVersion(Base):
     __tablename__ = "peo_versions"
-    __table_args__ = (UniqueConstraint("peo_id", "version_number", name="uq_peo_versions"),)
+    __table_args__ = (
+        UniqueConstraint("peo_id", "version_number", name="uq_peo_versions"),
+        UniqueConstraint("id", "peo_id", name="uq_peo_versions_id_peo"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     peo_id: Mapped[uuid.UUID] = mapped_column(
