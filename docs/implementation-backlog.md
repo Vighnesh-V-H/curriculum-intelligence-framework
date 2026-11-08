@@ -11,14 +11,9 @@ This file tracks work still needed to complete the Curriculum Intelligence and V
 - [x] Add a durable transactional outbox, retrying projection worker, and graph freshness metadata (`graph_projection_jobs`).
 
 ### 2. Curriculum verification
-- Extend verification beyond prerequisite checks to include:
-  - CO–PO mapping evidence and program-outcome coverage.
-  - Curriculum structure, semester/credit distribution, and progression checks.
-  - Topic overlap, redundancy, and progression analysis.
-  - Skills and competency coverage.
-  - Configured OBE/accreditation and industry-reference comparisons.
-- Persist findings with evidence, confidence, severity, recommendations, and traceable references.
-- Keep analysis advisory and require human review; do not automatically approve or modify curricula.
+- [x] Add deterministic course/semester structure checks, CO–PO coverage checks, semester credit summaries, and prerequisite analysis in one version-scoped run (FR-12/FR-14).
+- [x] Persist findings with evidence, confidence, severity, recommendations, and traceable references; require human review and never automatically modify curricula.
+- [ ] Add topic overlap/progression, skills/competency, configurable balance thresholds, and OBE/accreditation/industry comparisons after their reference data and rules are specified.
 
 ### 3. Finding review and reports
 - [x] Add authorized API operations to record finding review decisions and comments (accept, reject, or modify).

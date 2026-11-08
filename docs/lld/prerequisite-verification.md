@@ -2,13 +2,15 @@
 
 ## Scope
 
-This document covers prerequisite verification: analyzing the
+This document covers the prerequisite analyzer (FR-12): analyzing
 prerequisite relationships and dependency chains of a curriculum
-version, recording findings, and exposing verification runs to
-authorized users.
+version. It runs as one analyzer within the shared verification-run
+workflow, alongside the structure and outcome checks defined in
+[`curriculum-verification.md`](curriculum-verification.md).
 
 Verification is independent of prerequisite management (FR-11). It
-reports detected problems; it never modifies prerequisite data.
+reports detected problems; it never modifies prerequisite or
+curriculum data.
 
 ## Data Model
 

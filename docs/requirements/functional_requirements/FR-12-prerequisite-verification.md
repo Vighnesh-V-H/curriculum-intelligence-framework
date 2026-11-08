@@ -12,7 +12,9 @@ prerequisite relationships that may affect the logical progression
 of courses.
 
 The verification results shall be available for curriculum
-review and curriculum verification reporting.
+review and curriculum verification reporting. FR-12 defines only
+prerequisite checks; curriculum structure and outcome-coverage checks
+are defined separately in FR-14.
 
 ---
 

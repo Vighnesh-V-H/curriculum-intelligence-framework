@@ -5,17 +5,27 @@ from collections import deque
 from decimal import Decimal
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.errors import NotFoundError
 from app.db.models.academic import (
     Course,
+    CourseOutcomeStatus,
     CoursePrerequisite,
     CourseStatus,
     CurriculumVersion,
     PrerequisiteStatus,
+    Semester,
 )
 from app.db.models.audit import AuditLog
+from app.db.models.mappings import (
+    CoPoMapping,
+    CurriculumVersionProgramOutcome,
+    MappingStatus,
+    MappingVersionStatus,
+)
+from app.db.models.outcomes import OutcomeStatus
 from app.db.models.user import utc_now
 from app.db.models.verification import (
     FindingCategory,
@@ -77,6 +87,9 @@ class _FindingDraft:
         confidence: Decimal,
         course_ids: list[uuid.UUID] | None = None,
         prerequisite_ids: list[uuid.UUID] | None = None,
+        semester_ids: list[uuid.UUID] | None = None,
+        course_outcome_ids: list[uuid.UUID] | None = None,
+        program_outcome_ids: list[uuid.UUID] | None = None,
     ) -> None:
         self.category = category
         self.severity = severity
@@ -87,6 +100,9 @@ class _FindingDraft:
         self.confidence = confidence
         self.course_ids = course_ids or []
         self.prerequisite_ids = prerequisite_ids or []
+        self.semester_ids = semester_ids or []
+        self.course_outcome_ids = course_outcome_ids or []
+        self.program_outcome_ids = program_outcome_ids or []
 
 
 def _detect_cycles(
@@ -190,7 +206,7 @@ class VerificationService:
             extra={"actor_id": str(actor_id), "verification_run_id": str(run.id)},
         )
         try:
-            drafts = self._analyze_version(version_id)
+            drafts, analysis_summary = self._analyze_version(version_id)
         except Exception as exc:
             logger.error(
                 "Verification analysis failed",
@@ -211,7 +227,7 @@ class VerificationService:
             run.completed_at = utc_now()
             for draft in drafts:
                 self._persist_finding(run, draft)
-            run.summary = self._build_summary(drafts)
+            run.summary = self._build_summary(drafts, analysis_summary)
             self._session.commit()
 
         logger.info(
@@ -296,7 +312,7 @@ class VerificationService:
         self._session.refresh(finding)
         return FindingResponse.from_model(finding)
 
-    def _analyze_version(self, version_id: uuid.UUID) -> list[_FindingDraft]:
+    def _analyze_version(self, version_id: uuid.UUID) -> tuple[list[_FindingDraft], dict[str, Any]]:
         courses = {
             course.id: course
             for course in self._courses.list_by_version(version_id, active_only=False)
@@ -320,7 +336,8 @@ class VerificationService:
         self._check_cycles(active_edges, courses, active_relationships, drafts)
         self._check_ordering(courses, active_relationships, drafts)
         self._check_missing_prerequisites(courses, active_edges, drafts)
-        return drafts
+        analysis_summary = self._check_curriculum_structure(version_id, courses, drafts)
+        return drafts, analysis_summary
 
     def _check_self_references(
         self,
@@ -603,6 +620,166 @@ class VerificationService:
                     )
                 )
 
+    def _check_curriculum_structure(
+        self,
+        version_id: uuid.UUID,
+        courses: dict[uuid.UUID, Course],
+        drafts: list[_FindingDraft],
+    ) -> dict[str, Any]:
+        semesters = self._session.scalars(
+            select(Semester)
+            .where(Semester.curriculum_version_id == version_id)
+            .order_by(Semester.semester_number)
+        ).all()
+        active_courses = {
+            course_id: course
+            for course_id, course in courses.items()
+            if course.status == CourseStatus.ACTIVE.value
+        }
+        courses_by_semester: dict[uuid.UUID, list[Course]] = {}
+        credit_totals: dict[str, float] = {}
+        for course in active_courses.values():
+            courses_by_semester.setdefault(course.semester_id, []).append(course)
+            number = str(course.semester.semester_number)
+            credit_totals[number] = credit_totals.get(number, 0.0) + float(course.credits)
+
+        for semester in semesters:
+            if not courses_by_semester.get(semester.id):
+                drafts.append(
+                    _FindingDraft(
+                        category=FindingCategory.STRUCTURAL,
+                        severity=FindingSeverity.INFO,
+                        title="Semester has no active courses",
+                        description=(
+                            f"Semester {semester.semester_number} has no active courses "
+                            "in this curriculum version."
+                        ),
+                        evidence=f"EMPTY_SEMESTER: semester {semester.semester_number} is empty.",
+                        recommendation=(
+                            "Confirm whether this semester is intentionally left empty "
+                            "or whether courses are missing."
+                        ),
+                        confidence=Decimal("1.000"),
+                        semester_ids=[semester.id],
+                    )
+                )
+
+        active_course_outcomes = {}
+        for course in active_courses.values():
+            outcomes = [
+                outcome
+                for outcome in course.outcomes
+                if outcome.status == CourseOutcomeStatus.ACTIVE.value
+            ]
+            if not outcomes:
+                drafts.append(
+                    _FindingDraft(
+                        category=FindingCategory.OUTCOME,
+                        severity=FindingSeverity.MEDIUM,
+                        title="Course has no active course outcomes",
+                        description=f"{course.course_code} has no active course outcomes.",
+                        evidence=(
+                            f"COURSE_WITHOUT_CO: course {course.course_code} has no active CO."
+                        ),
+                        recommendation="Define and review course outcomes for this course.",
+                        confidence=Decimal("1.000"),
+                        course_ids=[course.id],
+                    )
+                )
+            for outcome in outcomes:
+                active_course_outcomes[outcome.id] = (course, outcome)
+
+        pins = self._session.scalars(
+            select(CurriculumVersionProgramOutcome).where(
+                CurriculumVersionProgramOutcome.curriculum_version_id == version_id
+            )
+        ).all()
+        active_program_outcomes = {
+            pin.program_outcome_id: pin.program_outcome
+            for pin in pins
+            if pin.program_outcome.status == OutcomeStatus.ACTIVE.value
+        }
+        mappings = self._session.scalars(
+            select(CoPoMapping).where(
+                CoPoMapping.curriculum_version_id == version_id,
+                CoPoMapping.status == MappingStatus.ACTIVE.value,
+            )
+        ).all()
+        covered_course_outcomes: set[uuid.UUID] = set()
+        covered_program_outcomes: set[uuid.UUID] = set()
+        for mapping in mappings:
+            if (
+                mapping.course_outcome_id not in active_course_outcomes
+                or mapping.program_outcome_id not in active_program_outcomes
+            ):
+                continue
+            latest = max(mapping.versions, key=lambda item: item.version_number, default=None)
+            if latest is None or latest.status != MappingVersionStatus.APPROVED.value:
+                continue
+            covered_course_outcomes.add(mapping.course_outcome_id)
+            covered_program_outcomes.add(mapping.program_outcome_id)
+
+        for course_outcome_id, (course, outcome) in active_course_outcomes.items():
+            if course_outcome_id in covered_course_outcomes:
+                continue
+            drafts.append(
+                _FindingDraft(
+                    category=FindingCategory.OUTCOME,
+                    severity=FindingSeverity.MEDIUM,
+                    title="Course outcome has no approved program-outcome mapping",
+                    description=(
+                        f"{course.course_code} {outcome.co_code} is not connected by an "
+                        "approved active mapping to a program outcome pinned to this version."
+                    ),
+                    evidence=(
+                        f"CO_WITHOUT_APPROVED_PO: {course.course_code} {outcome.co_code} "
+                        "has no qualifying approved mapping."
+                    ),
+                    recommendation=(
+                        "Review the relevant program outcomes and create or approve "
+                        "an appropriate mapping if one is justified."
+                    ),
+                    confidence=Decimal("1.000"),
+                    course_ids=[course.id],
+                    course_outcome_ids=[outcome.id],
+                )
+            )
+
+        for program_outcome_id, outcome in active_program_outcomes.items():
+            if program_outcome_id in covered_program_outcomes:
+                continue
+            drafts.append(
+                _FindingDraft(
+                    category=FindingCategory.OUTCOME,
+                    severity=FindingSeverity.MEDIUM,
+                    title="Program outcome has no approved course-outcome coverage",
+                    description=(
+                        f"{outcome.po_code} has no approved active mapping from a course "
+                        "outcome in this curriculum version."
+                    ),
+                    evidence=(
+                        f"PO_WITHOUT_APPROVED_CO: pinned program outcome {outcome.po_code} "
+                        "has no qualifying approved mapping."
+                    ),
+                    recommendation=(
+                        "Review whether this program outcome is intentionally uncovered "
+                        "or whether a valid course-outcome mapping is missing."
+                    ),
+                    confidence=Decimal("1.000"),
+                    program_outcome_ids=[program_outcome_id],
+                )
+            )
+
+        return {
+            "analyzers": ["PREREQUISITE", "STRUCTURE", "OUTCOME_COVERAGE"],
+            "credit_totals_by_semester": {
+                str(semester.semester_number): round(
+                    credit_totals.get(str(semester.semester_number), 0.0), 1
+                )
+                for semester in semesters
+            },
+        }
+
     def _persist_finding(self, run: VerificationRun, draft: _FindingDraft) -> VerificationFinding:
         finding = VerificationFinding(
             verification_run_id=run.id,
@@ -638,20 +815,50 @@ class VerificationService:
                     entity_id=prerequisite_id,
                 )
             )
+        for semester_id in draft.semester_ids:
+            references.append(
+                VerificationFindingReference(
+                    finding=finding,
+                    entity_type=ReferenceEntityType.SEMESTER.value,
+                    entity_id=semester_id,
+                )
+            )
+        for outcome_id in draft.course_outcome_ids:
+            references.append(
+                VerificationFindingReference(
+                    finding=finding,
+                    entity_type=ReferenceEntityType.COURSE_OUTCOME.value,
+                    entity_id=outcome_id,
+                )
+            )
+        for outcome_id in draft.program_outcome_ids:
+            references.append(
+                VerificationFindingReference(
+                    finding=finding,
+                    entity_type=ReferenceEntityType.PROGRAM_OUTCOME.value,
+                    entity_id=outcome_id,
+                )
+            )
         finding.references = references
         self._findings.add(finding)
         return finding
 
-    def _build_summary(self, drafts: list[_FindingDraft]) -> dict[str, Any]:
+    def _build_summary(
+        self, drafts: list[_FindingDraft], analysis_summary: dict[str, Any]
+    ) -> dict[str, Any]:
         by_severity: dict[str, int] = {}
+        by_category: dict[str, int] = {}
         for draft in drafts:
             by_severity[draft.severity.value] = by_severity.get(draft.severity.value, 0) + 1
+            by_category[draft.category.value] = by_category.get(draft.category.value, 0) + 1
         return {
             "result": "ISSUES_FOUND" if drafts else "PASSED",
             "total_findings": len(drafts),
             "findings_by_severity": dict(
                 sorted(by_severity.items(), key=lambda item: SEVERITY_ORDER[item[0]])
             ),
+            "findings_by_category": dict(sorted(by_category.items())),
+            **analysis_summary,
         }
 
     def _get_version_or_404(
