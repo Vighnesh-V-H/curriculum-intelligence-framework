@@ -18,6 +18,7 @@ from app.db.models.academic import (
 )
 from app.db.models.audit import AuditLog
 from app.db.models.document import Document, DocumentStatus
+from app.db.models.graph_projection import GraphProjectionJob, GraphProjectionJobStatus
 from app.db.models.mappings import (
     CoPoMapping,
     CoPoMappingVersion,
@@ -67,6 +68,8 @@ __all__ = [
     "Document",
     "DocumentStatus",
     "FindingCategory",
+    "GraphProjectionJob",
+    "GraphProjectionJobStatus",
     "FindingSeverity",
     "MappingLevel",
     "MappingStatus",

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.config import get_settings
+from app.db import graph_projection_events as _graph_projection_events  # noqa: F401
 
 settings = get_settings()
 

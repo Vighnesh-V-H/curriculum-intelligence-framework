@@ -8,7 +8,7 @@ This file tracks work still needed to complete the Curriculum Intelligence and V
 - [x] Define and document the graph model for curriculum entities and relationships (`docs/lld/knowledge-graph.md`).
 - [x] Implement version-scoped Neo4j snapshot persistence and read queries through the authenticated graph API.
 - [x] Define the relational/graph consistency and version-history strategy in the graph LLD.
-- [ ] Add durable outbox/retry and projection-freshness tracking; graph rebuild is currently explicit and can become stale after relational edits.
+- [x] Add a durable transactional outbox, retrying projection worker, and graph freshness metadata (`graph_projection_jobs`).
 
 ### 2. Curriculum verification
 - Extend verification beyond prerequisite checks to include:

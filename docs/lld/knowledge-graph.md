@@ -131,11 +131,25 @@ and `NEO4J_DATABASE` configure the driver. If Neo4j is not configured, graph
 requests return `503 graph_unavailable`; the application can still serve
 relational API requests.
 
-At this stage projection rebuild is explicit. Relational writes do not yet
-create durable projection jobs, so a graph may be stale after curriculum
-changes. Consumers must not treat graph reads as proof of current relational
-state. Durable outbox/retry and freshness reporting remain outstanding work
-tracked in `docs/implementation-backlog.md`.
+Curriculum-affecting ORM writes enqueue a `graph_projection_jobs` row in the
+same PostgreSQL transaction through session flush hooks. The outbox covers
+curricula, versions, semesters, courses, course outcomes, prerequisites,
+CO–PO mappings, and pinned PO/PEO identities and versions. A failure to persist
+the job therefore rolls back the source write as well.
+
+Run the retrying worker with `uv run python -m app.workers.graph_projection`;
+`--once` processes one batch. It claims jobs with row locks, retries failures
+up to five times, and stores only the exception type (not connection details)
+in the job record. Neo4j replacement is idempotent. If the worker crashes
+while a job is processing, it becomes eligible for reclaim after five minutes.
+
+The rebuild endpoint remains available for manual repair. The graph GET
+response includes `projection_status` and `is_current`; it is not current while
+any pending or processing job exists or if the latest projection job failed.
+Reads requiring authoritative, fresh data must still query PostgreSQL. A
+completed rebuild can race with an in-flight relational transaction, but that
+transaction's committed outbox job will keep the projection marked stale and
+be processed by the worker.
 
 ## Query contract (initial)
 

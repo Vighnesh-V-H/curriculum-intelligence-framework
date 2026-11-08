@@ -13,9 +13,12 @@ from app.db.models import (
     CurriculumVersion,
     CurriculumVersionPeo,
     CurriculumVersionProgramOutcome,
+    GraphProjectionJob,
+    GraphProjectionJobStatus,
     PeoVersion,
     ProgramOutcomeVersion,
 )
+from app.db.models.user import utc_now
 from app.services.knowledge_graph import KnowledgeGraphRepository
 
 
@@ -32,7 +35,12 @@ class KnowledgeGraphProjectionService:
         self._session = session
         self._graph = graph
 
-    def rebuild(self, curriculum_id: uuid.UUID, version_id: uuid.UUID) -> dict[str, Any]:
+    def rebuild(
+        self,
+        curriculum_id: uuid.UUID,
+        version_id: uuid.UUID,
+        record_completion: bool = True,
+    ) -> dict[str, Any]:
         version = self._session.scalar(
             select(CurriculumVersion).where(
                 CurriculumVersion.id == version_id,
@@ -216,6 +224,15 @@ class KnowledgeGraphProjectionService:
 
         snapshot = {"nodes": nodes, "relationships": relationships}
         self._graph.replace_version(version.id, snapshot)
+        if record_completion:
+            self._session.add(
+                GraphProjectionJob(
+                    curriculum_version_id=version.id,
+                    status=GraphProjectionJobStatus.COMPLETED.value,
+                    completed_at=utc_now(),
+                )
+            )
+            self._session.commit()
         return {
             "curriculum_id": str(curriculum_id),
             "curriculum_version_id": version_key,
@@ -234,4 +251,30 @@ class KnowledgeGraphProjectionService:
         )
         if version is None:
             raise NotFoundError("Curriculum version not found")
-        return self._graph.get_version_graph(version_id, limit=limit)
+        graph = self._graph.get_version_graph(version_id, limit=limit)
+        latest_job = self._session.scalar(
+            select(GraphProjectionJob)
+            .where(GraphProjectionJob.curriculum_version_id == version_id)
+            .order_by(GraphProjectionJob.requested_at.desc(), GraphProjectionJob.id.desc())
+            .limit(1)
+        )
+        pending = self._session.scalar(
+            select(GraphProjectionJob.id)
+            .where(
+                GraphProjectionJob.curriculum_version_id == version_id,
+                GraphProjectionJob.status.in_(
+                    [
+                        GraphProjectionJobStatus.PENDING.value,
+                        GraphProjectionJobStatus.PROCESSING.value,
+                    ]
+                ),
+            )
+            .limit(1)
+        )
+        graph["projection_status"] = latest_job.status if latest_job else "NOT_BUILT"
+        graph["is_current"] = bool(
+            latest_job
+            and latest_job.status == GraphProjectionJobStatus.COMPLETED.value
+            and pending is None
+        )
+        return graph
