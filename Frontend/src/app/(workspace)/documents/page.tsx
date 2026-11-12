@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { RotateCw } from "lucide-react";
 import {
   ApiError,
   Document,
@@ -75,9 +76,32 @@ export default function DocumentsPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [ingestingId, setIngestingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const canWrite = user
     ? user.roles.some((role) => WRITER_ROLES.has(role))
     : false;
+
+  const refreshDocuments = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const docs = await api.listDocuments();
+      setDocuments(docs);
+    } catch (caught) {
+      setActionError(errorBelongsTo(caught));
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!documents?.some((document) => document.status === "PROCESSING")) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      void refreshDocuments();
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [documents, refreshDocuments]);
 
   useEffect(() => {
     let cancelled = false;
@@ -166,11 +190,19 @@ export default function DocumentsPage() {
   async function handleIngest(documentId: string) {
     setActionError(null);
     setIngestingId(documentId);
+    setDocuments((current) =>
+      current?.map((item) =>
+        item.id === documentId
+          ? { ...item, status: "PROCESSING" as DocumentStatus, error_message: null }
+          : item,
+      ) ?? current,
+    );
     try {
       const updated = await api.ingestDocument(documentId);
       replaceDocument(updated);
     } catch (caught) {
       setActionError(errorBelongsTo(caught));
+      await refreshDocuments();
     } finally {
       setIngestingId(null);
     }
@@ -216,6 +248,18 @@ export default function DocumentsPage() {
               analysis.
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => void refreshDocuments()}
+            disabled={refreshing}
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-semibold text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RotateCw
+              aria-hidden="true"
+              className={refreshing ? "h-4 w-4 animate-spin" : "h-4 w-4"}
+            />
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </button>
         </header>
 
         {canWrite ? (
@@ -327,11 +371,24 @@ export default function DocumentsPage() {
                         >
                           {ingestingId === document.id
                             ? "Analyzing…"
-                            : "Analyze"}
+                            : document.status === "FAILED"
+                              ? "Retry"
+                              : document.status === "COMPLETED"
+                                ? "Re-analyze"
+                                : "Analyze"}
                         </button>
                       ) : null}
                     </div>
                   </div>
+
+                  {document.status === "FAILED" && document.error_message ? (
+                    <p
+                      role="status"
+                      className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+                    >
+                      {document.error_message}
+                    </p>
+                  ) : null}
 
                   {document.id === selectedId ? (
                     <div className="docs-detail mt-4 grid gap-4 border-t border-border pt-4 md:grid-cols-2">
