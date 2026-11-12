@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ArrowUpRight, Check, CircleHelp, LoaderCircle, Play, RotateCw, X } from "lucide-react";
 
 import { ApiError, api } from "@/lib/api";
-import type { Curriculum, CurriculumVersion, User, VerificationFinding, VerificationRun } from "@/lib/api";
+import type { Curriculum, CurriculumVersion, User, VerificationFinding, VerificationReport, VerificationRun } from "@/lib/api";
 
 const REVIEW_ROLES = new Set(["ADMIN", "COMMITTEE_MEMBER", "REVIEWER"]);
 const SEVERITIES = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"];
@@ -31,6 +31,10 @@ export default function VerificationPage() {
   const [severity, setSeverity] = useState("ALL");
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [reviewComment, setReviewComment] = useState("");
+  const [report, setReport] = useState<VerificationReport | null>(null);
+  const [groupBy, setGroupBy] = useState<"category" | "severity" | "review_status">("category");
+  const [reviewStatus, setReviewStatus] = useState("ALL");
+  const [reportNonce, setReportNonce] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,10 +98,24 @@ export default function VerificationPage() {
     return () => { cancelled = true; };
   }, [runId]);
 
-  const visibleFindings = useMemo(() => findings.filter((finding) =>
+  useEffect(() => {
+    let cancelled = false;
+    if (!runId) return;
+    api.getVerificationReport(runId, groupBy)
+      .then((data) => { if (!cancelled) setReport(data); })
+      .catch((caught: unknown) => { if (!cancelled) setError(errorMessage(caught)); });
+    return () => { cancelled = true; };
+  }, [runId, groupBy, reportNonce]);
+
+  const matchesFilters = useCallback((finding: VerificationFinding) =>
     (category === "ALL" || finding.category === category) &&
-    (severity === "ALL" || finding.severity === severity)
-  ), [findings, category, severity]);
+    (severity === "ALL" || finding.severity === severity) &&
+    (reviewStatus === "ALL" || finding.review_status === reviewStatus)
+  , [category, severity, reviewStatus]);
+  const visibleFindings = useMemo(() => findings.filter(matchesFilters), [findings, matchesFilters]);
+  const visibleReportGroups = useMemo(() => (report?.groups ?? [])
+    .map((group) => ({ ...group, findings: group.findings.filter(matchesFilters) }))
+    .filter((group) => group.findings.length > 0), [report, matchesFilters]);
   const selectedRun = runs.find((run) => run.id === runId) ?? null;
   const canReview = user?.roles.some((role) => REVIEW_ROLES.has(role)) ?? false;
   const selectedCurriculum = curricula.find((item) => item.id === curriculumId);
@@ -126,6 +144,7 @@ export default function VerificationPage() {
       setFindings((current) => current.map((finding) => finding.id === findingId ? updated : finding));
       setReviewingId(null);
       setReviewComment("");
+      setReportNonce((value) => value + 1);
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {
@@ -160,7 +179,7 @@ export default function VerificationPage() {
             setVersionId("");
             setRuns([]);
             setRunId("");
-            setFindings([]);
+            setFindings([]); setReport(null);
           }}>
             <option value="">Choose a curriculum</option>
             {curricula.map((item) => <option key={item.id} value={item.id}>{item.program_code} · {item.title || item.regulation}</option>)}
@@ -172,7 +191,7 @@ export default function VerificationPage() {
             setVersionId(event.target.value);
             setRuns([]);
             setRunId("");
-            setFindings([]);
+            setFindings([]); setReport(null);
           }} disabled={!versions.length}>
             <option value="">Choose a version</option>
             {versions.map((version) => <option key={version.id} value={version.id}>v{version.version_label} · {version.status}</option>)}
@@ -182,7 +201,7 @@ export default function VerificationPage() {
           <span>Verification run</span>
           <select value={runId} onChange={(event) => {
             setRunId(event.target.value);
-            setFindings([]);
+            setFindings([]); setReport(null);
           }} disabled={!runs.length}>
             <option value="">Select a run</option>
             {runs.map((run) => <option key={run.id} value={run.id}>{formatDate(run.requested_at)} · {run.status}</option>)}
@@ -207,11 +226,29 @@ export default function VerificationPage() {
         </section>
       ) : null}
 
+      {report && findings.length > 0 ? (
+        <section className="verification-report" aria-label="Grouped verification report">
+          <div className="verification-report__heading">
+            <div><span className="verification-label">GROUPED REPORT</span><h2>{report.total_findings} findings by {groupBy.replaceAll("_", " ")}</h2></div>
+            <label>Group by<select value={groupBy} onChange={(event) => setGroupBy(event.target.value as typeof groupBy)}><option value="category">Category</option><option value="severity">Severity</option><option value="review_status">Review status</option></select></label>
+          </div>
+          <div className="verification-report__counts">
+            <div><span>By category</span>{Object.entries(report.counts_by_category).map(([key, value]) => <small key={key}>{key.replaceAll("_", " ")} <b>{value}</b></small>)}</div>
+            <div><span>By severity</span>{Object.entries(report.counts_by_severity).map(([key, value]) => <small key={key}>{key} <b>{value}</b></small>)}</div>
+            <div><span>By review</span>{Object.entries(report.counts_by_review_status).map(([key, value]) => <small key={key}>{key.replaceAll("_", " ")} <b>{value}</b></small>)}</div>
+          </div>
+          <div className="verification-report__groups">
+            {visibleReportGroups.length ? visibleReportGroups.map((group) => <details key={group.key}><summary><strong>{group.key.replaceAll("_", " ")}</strong><span>{group.findings.length}</span></summary><ul>{group.findings.map((finding) => <li key={finding.id}><span className={`verification-severity verification-severity--${finding.severity.toLowerCase()}`}>{finding.severity}</span><button type="button" onClick={() => { setReviewingId(finding.id); setReviewComment(finding.review_comments ?? ""); document.getElementById(`finding-${finding.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }); }}>{finding.title}</button></li>)}</ul></details>) : <p className="verification-report__empty">No findings match the current filters.</p>}
+          </div>
+        </section>
+      ) : null}
+
       {runs.length > 0 ? (
         <div className="verification-filter-row">
           <div><h2>Findings</h2><span>{visibleFindings.length} shown of {findings.length}</span></div>
           <label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}><option value="ALL">All categories</option>{Array.from(new Set(findings.map((finding) => finding.category))).sort().map((item) => <option key={item}>{item}</option>)}</select></label>
           <label>Severity<select value={severity} onChange={(event) => setSeverity(event.target.value)}><option value="ALL">All severities</option>{SEVERITIES.filter((item) => findings.some((finding) => finding.severity === item)).map((item) => <option key={item}>{item}</option>)}</select></label>
+          <label>Review status<select value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value)}><option value="ALL">All statuses</option>{Array.from(new Set(findings.map((finding) => finding.review_status))).sort().map((item) => <option key={item}>{item}</option>)}</select></label>
         </div>
       ) : null}
 
@@ -224,7 +261,7 @@ export default function VerificationPage() {
 
       <section className="verification-findings" aria-label="Verification findings">
         {visibleFindings.map((finding) => (
-          <article className="verification-finding" key={finding.id}>
+          <article className="verification-finding" id={`finding-${finding.id}`} key={finding.id}>
             <div className="verification-finding__topline">
               <span className={`verification-severity verification-severity--${finding.severity.toLowerCase()}`}>{finding.severity}</span>
               <span className="verification-category">{finding.category.replaceAll("_", " ")}</span>

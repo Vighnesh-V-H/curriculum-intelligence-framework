@@ -131,6 +131,21 @@ export type VerificationFinding = {
   references: { id: string; entity_type: string; entity_id: string; note: string | null }[];
 };
 
+export type VerificationReportGroup = {
+  key: string;
+  count: number;
+  findings: VerificationFinding[];
+};
+
+export type VerificationReport = {
+  run: VerificationRun;
+  total_findings: number;
+  groups: VerificationReportGroup[];
+  counts_by_category: Record<string, number>;
+  counts_by_severity: Record<string, number>;
+  counts_by_review_status: Record<string, number>;
+};
+
 export type DraftOutcome = {
   code: string;
   statement: string;
@@ -417,6 +432,17 @@ export const api = {
   },
   listVerificationFindings(runId: string): Promise<VerificationFinding[]> {
     return request<VerificationFinding[]>(`/api/v1/verification-runs/${runId}/findings`);
+  },
+  getVerificationReport(
+    runId: string,
+    groupBy: "category" | "severity" | "review_status",
+    filters: { category?: string; severity?: string; review_status?: string } = {},
+  ): Promise<VerificationReport> {
+    const params = new URLSearchParams({ group_by: groupBy });
+    for (const [key, value] of Object.entries(filters)) {
+      if (value) params.set(key, value);
+    }
+    return request<VerificationReport>(`/api/v1/verification-runs/${runId}/report?${params}`);
   },
   reviewVerificationFinding(
     findingId: string,
