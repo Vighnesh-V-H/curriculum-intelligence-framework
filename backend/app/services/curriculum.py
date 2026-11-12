@@ -9,6 +9,7 @@ from app.db.models.academic import (
     Course,
     CourseOutcome,
     CourseOutcomeStatus,
+    CoursePrerequisite,
     CourseStatus,
     CourseType,
     Curriculum,
@@ -18,6 +19,11 @@ from app.db.models.academic import (
     VersionStatus,
 )
 from app.db.models.audit import AuditLog
+from app.db.models.mappings import (
+    CoPoMapping,
+    CurriculumVersionProgramOutcome,
+    MappingVersionStatus,
+)
 from app.db.models.user import utc_now
 from app.repositories.academic import CourseTypeRepository, ProgramRepository
 from app.repositories.audit import AuditLogRepository
@@ -27,6 +33,11 @@ from app.repositories.curricula import (
     CurriculumVersionRepository,
     SemesterRepository,
 )
+from app.repositories.mappings import (
+    CoPoMappingRepository,
+    CurriculumVersionProgramOutcomeRepository,
+)
+from app.repositories.prerequisites import ACTIVE_STATUSES, CoursePrerequisiteRepository
 from app.schemas.course import CourseCreate, CourseResponse, CourseUpdate
 from app.schemas.course_outcome import (
     CourseOutcomeCreate,
@@ -34,6 +45,7 @@ from app.schemas.course_outcome import (
     CourseOutcomeUpdate,
 )
 from app.schemas.curriculum import (
+    CourseOutcomeChange,
     CurriculumCreate,
     CurriculumDetailResponse,
     CurriculumResponse,
@@ -41,7 +53,13 @@ from app.schemas.curriculum import (
     CurriculumVersionResponse,
     CurriculumVersionSummary,
     FieldChange,
+    MappingChange,
     ModifiedCourse,
+    ModifiedCourseOutcome,
+    ModifiedMapping,
+    ModifiedProgramOutcome,
+    PrerequisiteChange,
+    ProgramOutcomeChange,
     VersionComparisonResponse,
     VersionCreateRequest,
     VersionStatusUpdateRequest,
@@ -88,6 +106,32 @@ def _curriculum_snapshot(curriculum: Curriculum) -> dict[str, Any]:
     }
 
 
+def _mapping_level_code(mapping: CoPoMapping) -> str | None:
+    versions = sorted(mapping.versions, key=lambda item: item.version_number)
+    if not versions:
+        return None
+    approved = next(
+        (
+            version
+            for version in reversed(versions)
+            if version.status == MappingVersionStatus.APPROVED.value
+        ),
+        None,
+    )
+    return (approved or versions[-1]).mapping_level.code
+
+
+def _pinned_outcome_description(pin: CurriculumVersionProgramOutcome) -> str | None:
+    return next(
+        (
+            version.description
+            for version in pin.program_outcome.versions
+            if version.id == pin.program_outcome_version_id
+        ),
+        None,
+    )
+
+
 class CurriculumService:
     def __init__(
         self,
@@ -99,6 +143,9 @@ class CurriculumService:
         semesters: SemesterRepository,
         courses: CourseRepository,
         course_outcomes: CourseOutcomeRepository,
+        prerequisites: CoursePrerequisiteRepository,
+        program_outcome_pins: CurriculumVersionProgramOutcomeRepository,
+        mappings: CoPoMappingRepository,
         audit_logs: AuditLogRepository,
     ) -> None:
         self._session = session
@@ -109,6 +156,9 @@ class CurriculumService:
         self._semesters = semesters
         self._courses = courses
         self._course_outcomes = course_outcomes
+        self._prerequisites = prerequisites
+        self._program_outcome_pins = program_outcome_pins
+        self._mappings = mappings
         self._audit_logs = audit_logs
 
     def create_curriculum(
@@ -496,6 +546,80 @@ class CurriculumService:
                     )
                 )
 
+        common_code_set = set(common_codes)
+
+        base_prerequisites = self._active_prerequisite_codes(base.id, common_code_set)
+        target_prerequisites = self._active_prerequisite_codes(target.id, common_code_set)
+        added_prerequisite_keys = sorted(
+            set(target_prerequisites) - set(base_prerequisites),
+            key=lambda key: (key[1], key[0]),
+        )
+        removed_prerequisite_keys = sorted(
+            set(base_prerequisites) - set(target_prerequisites),
+            key=lambda key: (key[1], key[0]),
+        )
+
+        base_outcomes = self._active_course_outcomes(base, common_code_set)
+        target_outcomes = self._active_course_outcomes(target, common_code_set)
+        added_outcome_keys = sorted(set(target_outcomes) - set(base_outcomes))
+        removed_outcome_keys = sorted(set(base_outcomes) - set(target_outcomes))
+        common_outcome_keys = sorted(set(base_outcomes) & set(target_outcomes))
+        modified_course_outcomes = [
+            ModifiedCourseOutcome(
+                course_code=course_code,
+                co_code=co_code,
+                before_description=base_outcomes[(course_code, co_code)].description,
+                after_description=target_outcomes[(course_code, co_code)].description,
+            )
+            for course_code, co_code in common_outcome_keys
+            if base_outcomes[(course_code, co_code)].description
+            != target_outcomes[(course_code, co_code)].description
+        ]
+
+        base_program_outcomes = self._pinned_program_outcomes(base.id)
+        target_program_outcomes = self._pinned_program_outcomes(target.id)
+        added_program_outcome_codes = sorted(
+            set(target_program_outcomes) - set(base_program_outcomes)
+        )
+        removed_program_outcome_codes = sorted(
+            set(base_program_outcomes) - set(target_program_outcomes)
+        )
+        common_program_outcome_codes = sorted(
+            set(base_program_outcomes) & set(target_program_outcomes)
+        )
+        modified_program_outcomes = [
+            ModifiedProgramOutcome(
+                po_code=po_code,
+                before_description=_pinned_outcome_description(base_program_outcomes[po_code]),
+                after_description=_pinned_outcome_description(target_program_outcomes[po_code]),
+            )
+            for po_code in common_program_outcome_codes
+            if _pinned_outcome_description(base_program_outcomes[po_code])
+            != _pinned_outcome_description(target_program_outcomes[po_code])
+        ]
+
+        base_mappings = self._active_mappings(base.id, common_code_set)
+        target_mappings = self._active_mappings(target.id, common_code_set)
+        added_mapping_keys = sorted(set(target_mappings) - set(base_mappings))
+        removed_mapping_keys = sorted(set(base_mappings) - set(target_mappings))
+        common_mapping_keys = sorted(set(base_mappings) & set(target_mappings))
+        modified_mappings = [
+            ModifiedMapping(
+                course_code=course_code,
+                co_code=co_code,
+                po_code=po_code,
+                before_mapping_level_code=_mapping_level_code(
+                    base_mappings[(course_code, co_code, po_code)]
+                ),
+                after_mapping_level_code=_mapping_level_code(
+                    target_mappings[(course_code, co_code, po_code)]
+                ),
+            )
+            for course_code, co_code, po_code in common_mapping_keys
+            if _mapping_level_code(base_mappings[(course_code, co_code, po_code)])
+            != _mapping_level_code(target_mappings[(course_code, co_code, po_code)])
+        ]
+
         return VersionComparisonResponse(
             curriculum_id=curriculum_id,
             base_version=CurriculumVersionSummary.from_model(base),
@@ -505,7 +629,132 @@ class CurriculumService:
                 CourseResponse.from_model(base_courses[code]) for code in removed_codes
             ],
             modified_courses=modified_courses,
+            added_prerequisites=[
+                PrerequisiteChange(
+                    prerequisite_course_code=prerequisite_code,
+                    target_course_code=target_code,
+                )
+                for prerequisite_code, target_code in added_prerequisite_keys
+            ],
+            removed_prerequisites=[
+                PrerequisiteChange(
+                    prerequisite_course_code=prerequisite_code,
+                    target_course_code=target_code,
+                )
+                for prerequisite_code, target_code in removed_prerequisite_keys
+            ],
+            added_course_outcomes=[
+                CourseOutcomeChange(
+                    course_code=course_code,
+                    co_code=co_code,
+                    description=target_outcomes[(course_code, co_code)].description,
+                )
+                for course_code, co_code in added_outcome_keys
+            ],
+            removed_course_outcomes=[
+                CourseOutcomeChange(
+                    course_code=course_code,
+                    co_code=co_code,
+                    description=base_outcomes[(course_code, co_code)].description,
+                )
+                for course_code, co_code in removed_outcome_keys
+            ],
+            modified_course_outcomes=modified_course_outcomes,
+            added_program_outcomes=[
+                ProgramOutcomeChange(
+                    po_code=po_code,
+                    description=_pinned_outcome_description(target_program_outcomes[po_code]),
+                )
+                for po_code in added_program_outcome_codes
+            ],
+            removed_program_outcomes=[
+                ProgramOutcomeChange(
+                    po_code=po_code,
+                    description=_pinned_outcome_description(base_program_outcomes[po_code]),
+                )
+                for po_code in removed_program_outcome_codes
+            ],
+            modified_program_outcomes=modified_program_outcomes,
+            added_mappings=[
+                MappingChange(
+                    course_code=course_code,
+                    co_code=co_code,
+                    po_code=po_code,
+                    mapping_level_code=_mapping_level_code(
+                        target_mappings[(course_code, co_code, po_code)]
+                    ),
+                )
+                for course_code, co_code, po_code in added_mapping_keys
+            ],
+            removed_mappings=[
+                MappingChange(
+                    course_code=course_code,
+                    co_code=co_code,
+                    po_code=po_code,
+                    mapping_level_code=_mapping_level_code(
+                        base_mappings[(course_code, co_code, po_code)]
+                    ),
+                )
+                for course_code, co_code, po_code in removed_mapping_keys
+            ],
+            modified_mappings=modified_mappings,
         )
+
+    def _active_prerequisite_codes(
+        self, version_id: uuid.UUID, allowed_course_codes: set[str]
+    ) -> dict[tuple[str, str], CoursePrerequisite]:
+        edges: dict[tuple[str, str], CoursePrerequisite] = {}
+        for edge in self._prerequisites.list_by_version(version_id):
+            if edge.status not in ACTIVE_STATUSES:
+                continue
+            prerequisite_code = edge.prerequisite_course.course_code
+            target_code = edge.target_course.course_code
+            if (
+                prerequisite_code not in allowed_course_codes
+                or target_code not in allowed_course_codes
+            ):
+                continue
+            edges[(prerequisite_code, target_code)] = edge
+        return edges
+
+    def _active_course_outcomes(
+        self, version: CurriculumVersion, allowed_course_codes: set[str]
+    ) -> dict[tuple[str, str], CourseOutcome]:
+        outcomes: dict[tuple[str, str], CourseOutcome] = {}
+        for course in version.courses:
+            if (
+                course.status != CourseStatus.ACTIVE.value
+                or course.course_code not in allowed_course_codes
+            ):
+                continue
+            for outcome in course.outcomes:
+                if outcome.status == CourseOutcomeStatus.ACTIVE.value:
+                    outcomes[(course.course_code, outcome.co_code)] = outcome
+        return outcomes
+
+    def _pinned_program_outcomes(
+        self, version_id: uuid.UUID
+    ) -> dict[str, CurriculumVersionProgramOutcome]:
+        return {
+            pin.program_outcome.po_code: pin
+            for pin in self._program_outcome_pins.list_by_version(version_id)
+        }
+
+    def _active_mappings(
+        self, version_id: uuid.UUID, allowed_course_codes: set[str]
+    ) -> dict[tuple[str, str, str], CoPoMapping]:
+        mappings: dict[tuple[str, str, str], CoPoMapping] = {}
+        for mapping in self._mappings.list_by_version(version_id):
+            course_code = mapping.course_outcome.course.course_code
+            if course_code not in allowed_course_codes:
+                continue
+            key = (
+                course_code,
+                mapping.course_outcome.co_code,
+                mapping.program_outcome.po_code,
+            )
+            mappings[key] = mapping
+        return mappings
 
     def add_course(
         self,

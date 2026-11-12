@@ -212,6 +212,11 @@ def get_curriculum_service(
     semesters: SemesterRepository = Depends(get_semester_repository),
     courses: CourseRepository = Depends(get_course_repository),
     course_outcomes: CourseOutcomeRepository = Depends(get_course_outcome_repository),
+    prerequisites: CoursePrerequisiteRepository = Depends(get_prerequisite_repository),
+    program_outcome_pins: CurriculumVersionProgramOutcomeRepository = Depends(
+        get_curriculum_version_outcome_repository
+    ),
+    mappings: CoPoMappingRepository = Depends(get_mapping_repository),
     audit_logs: AuditLogRepository = Depends(get_audit_log_repository),
 ) -> CurriculumService:
     return CurriculumService(
@@ -223,6 +228,9 @@ def get_curriculum_service(
         semesters,
         courses,
         course_outcomes,
+        prerequisites,
+        program_outcome_pins,
+        mappings,
         audit_logs,
     )
 

@@ -231,6 +231,50 @@ class ModifiedCourse(BaseModel):
     changes: dict[str, FieldChange]
 
 
+class PrerequisiteChange(BaseModel):
+    prerequisite_course_code: str
+    target_course_code: str
+
+
+class CourseOutcomeChange(BaseModel):
+    course_code: str
+    co_code: str
+    description: str
+
+
+class ModifiedCourseOutcome(BaseModel):
+    course_code: str
+    co_code: str
+    before_description: str
+    after_description: str
+
+
+class ProgramOutcomeChange(BaseModel):
+    po_code: str
+    description: str | None
+
+
+class ModifiedProgramOutcome(BaseModel):
+    po_code: str
+    before_description: str | None
+    after_description: str | None
+
+
+class MappingChange(BaseModel):
+    course_code: str
+    co_code: str
+    po_code: str
+    mapping_level_code: str | None
+
+
+class ModifiedMapping(BaseModel):
+    course_code: str
+    co_code: str
+    po_code: str
+    before_mapping_level_code: str | None
+    after_mapping_level_code: str | None
+
+
 class VersionComparisonResponse(BaseModel):
     curriculum_id: uuid.UUID
     base_version: CurriculumVersionSummary
@@ -238,3 +282,14 @@ class VersionComparisonResponse(BaseModel):
     added_courses: list[CourseResponse]
     removed_courses: list[CourseResponse]
     modified_courses: list[ModifiedCourse]
+    added_prerequisites: list[PrerequisiteChange] = Field(default_factory=list)
+    removed_prerequisites: list[PrerequisiteChange] = Field(default_factory=list)
+    added_course_outcomes: list[CourseOutcomeChange] = Field(default_factory=list)
+    removed_course_outcomes: list[CourseOutcomeChange] = Field(default_factory=list)
+    modified_course_outcomes: list[ModifiedCourseOutcome] = Field(default_factory=list)
+    added_program_outcomes: list[ProgramOutcomeChange] = Field(default_factory=list)
+    removed_program_outcomes: list[ProgramOutcomeChange] = Field(default_factory=list)
+    modified_program_outcomes: list[ModifiedProgramOutcome] = Field(default_factory=list)
+    added_mappings: list[MappingChange] = Field(default_factory=list)
+    removed_mappings: list[MappingChange] = Field(default_factory=list)
+    modified_mappings: list[ModifiedMapping] = Field(default_factory=list)

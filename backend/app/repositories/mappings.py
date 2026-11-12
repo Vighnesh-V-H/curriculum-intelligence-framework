@@ -48,6 +48,14 @@ class CurriculumVersionProgramOutcomeRepository:
             (curriculum_version_id, program_outcome_id),
         )
 
+    def list_by_version(
+        self, curriculum_version_id: uuid.UUID
+    ) -> list[CurriculumVersionProgramOutcome]:
+        statement = select(CurriculumVersionProgramOutcome).where(
+            CurriculumVersionProgramOutcome.curriculum_version_id == curriculum_version_id
+        )
+        return list(self._session.scalars(statement))
+
     def add(self, pin: CurriculumVersionProgramOutcome) -> CurriculumVersionProgramOutcome:
         self._session.add(pin)
         self._session.flush()
