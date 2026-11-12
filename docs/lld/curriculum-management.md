@@ -56,9 +56,21 @@ DRAFT -> UNDER_REVIEW -> APPROVED -> PUBLISHED -> ARCHIVED
   chain.
 
 Version comparison accepts `base_version_id` and `target_version_id`
-query parameters. It reports added courses, removed courses, and
-modified course fields, including credits, semester allocation, type,
-contact hours, description, and syllabus.
+query parameters. It reports:
+
+- Added, removed, and modified courses, including credits, semester
+  allocation, type, contact hours, description, and syllabus.
+- Added and removed active prerequisite edges (`PROPOSED` or `APPROVED`).
+- Added, removed, and modified active course outcomes for courses present
+  in both versions.
+- Added, removed, and modified pinned program outcome descriptions.
+- Added, removed, and modified active CO–PO mappings, comparing the
+  effective mapping level (latest approved mapping version, otherwise the
+  latest mapping version).
+
+Prerequisites, course outcomes, and mappings attached to courses that were
+added or removed are not repeated in their own sections; the course-level
+difference already identifies them.
 
 ## Courses
 
@@ -77,6 +89,12 @@ audit records remain intact. Before removing a course, the service checks
 for active prerequisite relationships that reference it. If any exist,
 the request is rejected with `course_has_dependencies` unless `force=true`
 is supplied. A removed course code may be reused within the same draft.
+
+The `/curricula` interface requires confirmation before removing a course.
+It lists active prerequisite dependents in the confirmation dialog, shows
+how many course outcomes and CO–PO mappings the course has, and sends
+`force=true` only when the operator explicitly confirms a removal that has
+prerequisite dependents.
 
 ## AI-assisted Curriculum Draft Preview
 
@@ -133,12 +151,11 @@ available to administrators and committee members at all times, rather than
 only when the database is empty. The panel starts expanded when either list is
 empty so first-time setup remains discoverable.
 
-Version comparison renders the API result as separate added, removed, and
-modified course sections. Each modified row shows the field, its previous value,
-and its new value. The comparison contract currently covers course records only;
-prerequisite, course outcome, and outcome-mapping differences required by FR-04
-are not returned by the comparison service yet and remain tracked in the
-implementation backlog.
+Version comparison renders the API result as separate sections for courses,
+prerequisites, course outcomes, program outcomes, and CO–PO mappings. Each
+modified row shows the previous and new value. Changes inside added or removed
+courses are reported with the course itself rather than repeated in the
+outcome, prerequisite, and mapping sections.
 
 ## Audit Trail
 

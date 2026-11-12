@@ -339,3 +339,42 @@ def test_update_course_outcome_rejects_duplicate_code(client, faculty_token, pro
 
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "course_outcome_exists"
+
+
+def test_remove_course_with_prerequisite_dependency_requires_force(
+    client, faculty_token, program
+):
+    created = client.post(
+        "/api/v1/curricula",
+        json=curriculum_payload(program["id"]),
+        headers=bearer(faculty_token),
+    ).json()
+    version = created["versions"][0]
+    courses = {course["course_code"]: course for course in version["courses"]}
+    prerequisite = client.post(
+        f"/api/v1/curricula/{created['id']}/versions/{version['id']}/prerequisites",
+        json={
+            "prerequisite_course_id": courses["CS101"]["id"],
+            "target_course_id": courses["CS201"]["id"],
+        },
+        headers=bearer(faculty_token),
+    )
+    assert prerequisite.status_code == 201
+
+    course_url = (
+        f"/api/v1/curricula/{created['id']}/versions/{version['id']}"
+        f"/courses/{courses['CS101']['id']}"
+    )
+    blocked = client.delete(course_url, headers=bearer(faculty_token))
+    assert blocked.status_code == 409
+    assert blocked.json()["error"]["code"] == "course_has_dependencies"
+
+    forced = client.delete(f"{course_url}?force=true", headers=bearer(faculty_token))
+    assert forced.status_code == 204
+
+    detail = client.get(
+        f"/api/v1/curricula/{created['id']}/versions/{version['id']}",
+        headers=bearer(faculty_token),
+    )
+    assert detail.status_code == 200
+    assert {course["course_code"] for course in detail.json()["courses"]} == {"CS201"}

@@ -79,6 +79,50 @@ export type ModifiedCourse = {
   changes: Record<string, FieldChange>;
 };
 
+export type PrerequisiteChange = {
+  prerequisite_course_code: string;
+  target_course_code: string;
+};
+
+export type CourseOutcomeChange = {
+  course_code: string;
+  co_code: string;
+  description: string;
+};
+
+export type ModifiedCourseOutcome = {
+  course_code: string;
+  co_code: string;
+  before_description: string;
+  after_description: string;
+};
+
+export type ProgramOutcomeChange = {
+  po_code: string;
+  description: string | null;
+};
+
+export type ModifiedProgramOutcome = {
+  po_code: string;
+  before_description: string | null;
+  after_description: string | null;
+};
+
+export type MappingChange = {
+  course_code: string;
+  co_code: string;
+  po_code: string;
+  mapping_level_code: string | null;
+};
+
+export type ModifiedMapping = {
+  course_code: string;
+  co_code: string;
+  po_code: string;
+  before_mapping_level_code: string | null;
+  after_mapping_level_code: string | null;
+};
+
 export type VersionComparison = {
   curriculum_id: string;
   base_version: CurriculumVersionSummary;
@@ -86,6 +130,17 @@ export type VersionComparison = {
   added_courses: Course[];
   removed_courses: Course[];
   modified_courses: ModifiedCourse[];
+  added_prerequisites: PrerequisiteChange[];
+  removed_prerequisites: PrerequisiteChange[];
+  added_course_outcomes: CourseOutcomeChange[];
+  removed_course_outcomes: CourseOutcomeChange[];
+  modified_course_outcomes: ModifiedCourseOutcome[];
+  added_program_outcomes: ProgramOutcomeChange[];
+  removed_program_outcomes: ProgramOutcomeChange[];
+  modified_program_outcomes: ModifiedProgramOutcome[];
+  added_mappings: MappingChange[];
+  removed_mappings: MappingChange[];
+  modified_mappings: ModifiedMapping[];
 };
 
 export type Course = {
@@ -406,8 +461,9 @@ export const api = {
   updateCourse(curriculumId: string, versionId: string, courseId: string, payload: Record<string, unknown>): Promise<Course> {
     return request(`/api/v1/curricula/${curriculumId}/versions/${versionId}/courses/${courseId}`, { method: "PATCH", body: JSON.stringify(payload) });
   },
-  removeCourse(curriculumId: string, versionId: string, courseId: string): Promise<void> {
-    return request(`/api/v1/curricula/${curriculumId}/versions/${versionId}/courses/${courseId}`, { method: "DELETE" });
+  removeCourse(curriculumId: string, versionId: string, courseId: string, force = false): Promise<void> {
+    const query = force ? "?force=true" : "";
+    return request(`/api/v1/curricula/${curriculumId}/versions/${versionId}/courses/${courseId}${query}`, { method: "DELETE" });
   },
   listCourseOutcomes(curriculumId: string, versionId: string, courseId: string): Promise<CourseOutcome[]> {
     return request(`/api/v1/curricula/${curriculumId}/versions/${versionId}/courses/${courseId}/outcomes`);
