@@ -36,6 +36,7 @@ This file tracks work still needed to complete the Curriculum Intelligence and V
 
 ### 1. Curriculum management
 - [x] Add a test workspace for curriculum creation, course/course-outcome management, version status, and comparisons.
+- [x] Display version comparisons as structured added, removed, and modified course sections, including before/after values for every changed course field.
 - [x] Complete curriculum metadata editing and expose all course-outcome update/remove operations.
 - [x] Respect backend authorization and version-state rules; the frontend must not be the authority for access control (API enforcement remains authoritative).
 
@@ -57,6 +58,10 @@ This file tracks work still needed to complete the Curriculum Intelligence and V
 - [x] Complete the UI for uploading documents, tracking processing status, viewing extracted/analysis results, and handling failures.
 - [x] Add a draft review/edit screen and an explicit save-to-curriculum flow; generated drafts must not be treated as saved curricula until confirmed.
 
+### 6. Administration and academic setup
+- [x] Add an admin-only user management page for account creation, role assignment, and active/inactive/locked status changes.
+- [x] Keep department and program setup available to administrators and committee members at all times, with the panel expanded during first-time setup.
+
 ## Cross-cutting
 
 - [x] Update the relevant requirements, LLDs, API contracts, and project status documentation as features are designed and implemented.
@@ -66,6 +71,7 @@ This file tracks work still needed to complete the Curriculum Intelligence and V
 
 ## Blocked or deferred
 
+- Version comparison currently reports course records only. FR-04 prerequisite, course outcome, and program outcome/CO–PO mapping differences remain deferred until the comparison API returns those structures.
 - Extended FR-14 verification (topic overlap/progression, skills/competency, configurable balance thresholds, and OBE/accreditation/industry comparisons) is deferred until institutional rules and governed reference datasets are defined.
 - Extraction-quality and analysis-accuracy evaluation requires labelled datasets reviewed by domain experts.
 - OCR for scanned documents is explicitly out of scope; such files fail with a clear "no extractable text" error.
@@ -73,4 +79,4 @@ This file tracks work still needed to complete the Curriculum Intelligence and V
 
 ## Current baseline
 
-The repository already has authentication, relational curriculum/version management, course outcomes, Program Outcome/PEO and CO–PO management, prerequisite management and prerequisite verification, document upload/LLM processing, and AI-assisted curriculum draft generation. The frontend covers authentication, documents with processing status and retry, draft generation and review, verification review with grouped reports, and a curriculum workspace with metadata/CO/PO/PEO/mapping editing, structure summaries, and accessible dependency exploration. Backend tests cover curriculum editing, mapping lifecycle rules, prerequisite removal, document retry, and the document-to-draft-to-saved-curriculum-to-verification-report flow. This backlog lists remaining work.
+The repository already has authentication, relational curriculum/version management, course outcomes, Program Outcome/PEO and CO-PO management, prerequisite management and prerequisite verification, document upload/LLM processing, and AI-assisted curriculum draft generation. The frontend covers authentication, admin-only user administration, documents with processing status and retry, draft generation and review, verification review with grouped reports, and a curriculum workspace with metadata/CO/PO/PEO/mapping editing, structure summaries, accessible dependency exploration, always-available academic setup, and structured course-level version comparison. Backend tests cover curriculum editing, mapping lifecycle rules, prerequisite removal, document retry, and the document-to-draft-to-saved-curriculum-to-verification-report flow. This backlog lists remaining work.

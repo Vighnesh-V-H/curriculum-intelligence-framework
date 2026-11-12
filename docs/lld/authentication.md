@@ -140,6 +140,11 @@ files are excluded by `.gitignore`.
   in `localStorage` for this initial implementation.
 - `/dashboard` calls `GET /api/v1/auth/me`; a `401` clears the token and
   redirects to `/login`.
+- `/users` provides admin-only account administration: create an account,
+  assign one or more seeded roles, and set the account status. The navigation
+  item is hidden from other roles, and every user-administration endpoint still
+  requires `ADMIN`. Administrators cannot change their own roles or status from
+  this page, avoiding accidental lockout.
 - Storing tokens in `localStorage` is acceptable for this development phase
   but is vulnerable to XSS. Moving to httpOnly secure cookies is a planned
   hardening step.

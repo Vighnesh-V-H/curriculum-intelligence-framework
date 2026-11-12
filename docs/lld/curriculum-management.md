@@ -128,6 +128,18 @@ Actions are shown according to the current user's role and draft state; the API
 remains authoritative for authorization and transition validation. AI-generated
 draft output remains a preview and is not saved by this page.
 
+Departments and programs are managed through an academic setup panel that is
+available to administrators and committee members at all times, rather than
+only when the database is empty. The panel starts expanded when either list is
+empty so first-time setup remains discoverable.
+
+Version comparison renders the API result as separate added, removed, and
+modified course sections. Each modified row shows the field, its previous value,
+and its new value. The comparison contract currently covers course records only;
+prerequisite, course outcome, and outcome-mapping differences required by FR-04
+are not returned by the comparison service yet and remain tracked in the
+implementation backlog.
+
 ## Audit Trail
 
 Curriculum, version, and course writes append to `audit_logs` with the
