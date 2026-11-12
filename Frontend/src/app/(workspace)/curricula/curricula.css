@@ -85,5 +85,45 @@
 .academic-manage-row form { display: flex; gap: 5px; }
 .academic-manage-row select { min-height: 31px; padding: 4px 6px; font-size: 10px; }
 .academic-manage-row button { min-height: 31px; padding: 0 8px; font-size: 10px; }
+.academic-workspace--stacked { grid-template-columns: 1fr; }
+.academic-semester-map { display: grid; gap: 12px; margin-top: 14px; }
+.academic-semester { padding: 12px 14px; border: 1px solid var(--border); border-radius: 6px; }
+.academic-semester header { display: flex; justify-content: space-between; gap: 10px; }
+.academic-semester header strong { font-size: 12px; }
+.academic-semester header span { color: var(--muted-foreground); font-size: 10px; }
+.academic-course-detail { margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--border); }
+.academic-course-detail summary { display: flex; justify-content: space-between; gap: 10px; color: var(--foreground); font-size: 11px; cursor: pointer; }
+.academic-course-detail summary small { color: var(--muted-foreground); font-size: 10px; }
+.academic-course-detail > div { padding: 8px 0 0 10px; }
+.academic-course-detail p { margin: 0 0 7px; color: var(--muted-foreground); font-size: 11px; line-height: 1.55; }
+.academic-course-detail pre { max-height: 200px; overflow: auto; padding: 8px; border-radius: 4px; background: var(--muted); font-size: 10px; white-space: pre-wrap; }
+.academic-course-detail strong { display: block; margin: 10px 0 5px; color: var(--muted-foreground); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }
+.academic-graph { display: grid; gap: 16px; }
+.academic-graph__canvas { overflow-x: auto; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); }
+.academic-graph__canvas svg { min-width: 620px; color: var(--muted-foreground); }
+.academic-graph__semester { fill: var(--muted-foreground); font-size: 10px; font-weight: 600; }
+.academic-graph__edge { fill: none; stroke: color-mix(in srgb, var(--muted-foreground), transparent 45%); stroke-width: 1.2; }
+.academic-graph__edge--proposed { stroke-dasharray: 4 3; }
+.academic-graph__edge--rejected { display: none; }
+.academic-graph__node { cursor: pointer; outline: none; }
+.academic-graph__node circle { fill: var(--card); stroke: var(--border); stroke-width: 1.4; transition: fill 150ms, stroke 150ms; }
+.academic-graph__node:hover circle, .academic-graph__node:focus-visible circle { stroke: var(--primary); }
+.academic-graph__node.is-selected circle { fill: color-mix(in srgb, var(--primary), var(--card) 86%); stroke: var(--primary); stroke-width: 2; }
+.academic-graph__node text { fill: var(--foreground); font-size: 9px; font-weight: 600; pointer-events: none; }
+.academic-graph__hint { margin: 8px 2px 0; color: var(--muted-foreground); font-size: 10px; }
+.academic-graph__detail { padding: 13px; border: 1px solid var(--border); border-radius: 6px; }
+.academic-graph__detail h3 { margin: 0 0 5px; font-size: 13px; }
+.academic-graph__detail > p { margin: 0 0 8px; color: var(--muted-foreground); font-size: 11px; }
+.academic-graph__detail > div { margin-top: 10px; }
+.academic-graph__detail > div > strong { display: block; margin-bottom: 5px; color: var(--muted-foreground); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }
+.academic-graph__detail ul { display: grid; gap: 4px; margin: 0; padding-left: 17px; }
+.academic-graph__detail li, .academic-graph__detail > div > p { color: var(--muted-foreground); font-size: 11px; line-height: 1.5; }
+.academic-graph__detail li b { color: var(--primary); }
+.academic-graph__detail li span { color: var(--muted-foreground); font-size: 9px; text-transform: capitalize; }
+.academic-graph__detail pre { max-height: 180px; overflow: auto; padding: 8px; border-radius: 4px; background: var(--muted); font-size: 10px; white-space: pre-wrap; }
+.academic-graph__table h3 { margin: 0 0 8px; font-size: 12px; }
+.academic-graph__table table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.academic-graph__table th, .academic-graph__table td { padding: 7px 9px; border-top: 1px solid var(--border); text-align: left; }
+.academic-graph__table th { color: var(--muted-foreground); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }
 @media (max-width: 850px) { .academic-workspace { grid-template-columns: 1fr; } .academic-summary { grid-template-columns: repeat(2, minmax(0,1fr)); } .academic-fields { grid-template-columns: repeat(2, minmax(0,1fr)); } }
 @media (max-width: 560px) { .academic-heading { align-items: stretch; flex-direction: column; } .academic-heading-actions { align-items: stretch; flex-direction: column; } .academic-picker { min-width: 0; } .academic-fields, .academic-summary { grid-template-columns: 1fr; } .academic-row { flex-direction: column; } .academic-course-actions, .academic-outcome-actions { width: 100%; justify-items: stretch; } .academic-outcome-edit, .academic-edit-course { min-width: 0; } .academic-co-form { grid-template-columns: 68px minmax(0, 1fr); } .academic-co-form button { grid-column: 1 / -1; } .academic-manage-row { grid-template-columns: 1fr; } }

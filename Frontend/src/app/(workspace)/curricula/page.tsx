@@ -2,12 +2,13 @@
 
 import "./curricula.css";
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { CurriculumGraph } from "@/components/curriculum-graph";
 import { ApiError, api, CourseOutcome, CourseType, Curriculum, CurriculumVersion, Department, Mapping, MappingLevel, Outcome, Program, Prerequisite } from "@/lib/api";
 
 const WRITERS = new Set(["ADMIN", "COMMITTEE_MEMBER", "FACULTY"]);
 const REVIEWERS = new Set(["ADMIN", "COMMITTEE_MEMBER"]);
 type Detail = Curriculum & { versions: CurriculumVersion[] };
-type Tab = "courses" | "outcomes" | "mappings" | "prerequisites" | "versions";
+type Tab = "courses" | "structure" | "outcomes" | "mappings" | "prerequisites" | "versions";
 
 function message(error: unknown) {
   return error instanceof ApiError ? error.message : "The request could not be completed.";
@@ -261,7 +262,8 @@ export default function CurriculaPage() {
   const courses = selectedVersion?.courses ?? [];
   const allOutcomes = courses.flatMap((course) => (courseOutcomes[course.id] ?? []).map((outcome) => ({ ...outcome, course_code: course.course_code })));
   const tabs: { id: Tab; label: string }[] = [
-    { id: "courses", label: "Courses & COs" }, { id: "outcomes", label: "Program outcomes" },
+    { id: "courses", label: "Courses & COs" }, { id: "structure", label: "Structure & dependencies" },
+    { id: "outcomes", label: "Program outcomes" },
     { id: "mappings", label: "CO–PO mappings" }, { id: "prerequisites", label: "Prerequisites" }, { id: "versions", label: "Versions" },
   ];
 
@@ -304,6 +306,34 @@ export default function CurriculaPage() {
       {!editable && <p className="academic-readonly">This version is {selectedVersion?.status.toLowerCase() ?? "not selected"}. Select an editable draft to make changes.</p>}
       {tab === "courses" && <section className="academic-workspace"><div className="academic-panel"><h2>Courses in {selectedVersion?.version_label}</h2>{courses.length ? <div className="academic-list">{courses.map((course) => <article key={course.id} className="academic-row"><div><strong>{course.course_code} · {course.course_name}</strong><p>{course.course_type_name} · {course.credits} credits · Semester {course.semester_number}</p><small>{course.description}</small><div className="co-list">{(courseOutcomes[course.id] ?? []).map((co) => <span key={co.id}><b>{co.co_code}</b> {co.description}</span>)}</div></div>{editable && <div className="academic-course-actions"><details className="academic-edit-course"><summary>Edit</summary><form onSubmit={(event) => updateCourse(event, course.id)}><label>Title<input name="course_name" defaultValue={course.course_name} required /></label><label>Type<select name="course_type_code" defaultValue={course.course_type_code}>{courseTypes.map((type) => <option key={type.code} value={type.code}>{type.name}</option>)}</select></label><label>Semester<select name="semester_number" defaultValue={course.semester_number}>{selectedVersion?.semesters.map((semester) => <option key={semester.id} value={semester.semester_number}>{semester.name ?? `Semester ${semester.semester_number}`}</option>)}</select></label><label>Credits<input name="credits" type="number" min="0.1" max="30" step="0.5" defaultValue={course.credits} required /></label><label>Description<textarea name="description" defaultValue={course.description ?? ""} rows={2} /></label><button disabled={busy}>Save course</button></form></details><form className="academic-co-form" onSubmit={(event) => createCourseOutcome(event, course.id)}><input name="co_code" aria-label="Course outcome code" placeholder="CO code" required /><input name="description" aria-label="Course outcome description" placeholder="Outcome statement" required /><button disabled={busy}>Add CO</button></form><details className="academic-co-manage"><summary>Manage COs</summary>{(courseOutcomes[course.id] ?? []).length ? (courseOutcomes[course.id] ?? []).map((co) => <div className="academic-co-edit" key={co.id}><form onSubmit={(event) => updateCourseOutcome(event, course.id, co.id)}><label>CO code<input name="co_code" defaultValue={co.co_code} required /></label><label>Description<textarea name="description" defaultValue={co.description} rows={2} required /></label><button disabled={busy}>Save CO</button></form><button className="academic-danger" type="button" disabled={busy} onClick={() => void removeCourseOutcome(course.id, co.id)}>Remove CO</button></div>) : <p className="academic-empty">No course outcomes yet.</p>}</details><button className="academic-danger" type="button" disabled={busy} onClick={() => void run(() => api.removeCourse(detail.id, versionId, course.id), "Course removed.")}>Remove</button></div>}</article>)}</div> : <p className="academic-empty">No courses in this version yet.</p>}</div>
         {editable && <form className="academic-panel" onSubmit={createCourse}><h2>Add a course</h2><div className="academic-fields academic-fields--one"><label>Course code<input name="course_code" required /></label><label>Course title<input name="course_name" required /></label><label>Course type<select name="course_type_code" required>{courseTypes.map((type) => <option key={type.code} value={type.code}>{type.name}</option>)}</select></label><label>Semester<select name="semester_number" required>{selectedVersion?.semesters.map((semester) => <option key={semester.id} value={semester.semester_number}>{semester.name ?? `Semester ${semester.semester_number}`}</option>)}</select></label><label>Credits<input name="credits" type="number" min="0.1" max="30" step="0.5" defaultValue="3" required /></label><label>Contact hours<input name="contact_hours" type="number" min="0" /></label><label>Description<textarea name="description" rows={2} /></label></div><button disabled={busy}>Add course</button></form>}
+      </section>}
+      {tab === "structure" && <section className="academic-workspace academic-workspace--stacked">
+        <div className="academic-panel">
+          <h2>Semester map</h2>
+          <p>Credit totals and course details for {selectedVersion?.version_label}.</p>
+          <div className="academic-semester-map">
+            {selectedVersion?.semesters.map((semester) => {
+              const semesterCourses = courses.filter((course) => course.semester_number === semester.semester_number);
+              const credits = semesterCourses.reduce((total, course) => total + Number(course.credits), 0);
+              return <article className="academic-semester" key={semester.id}>
+                <header><strong>{semester.name ?? `Semester ${semester.semester_number}`}</strong><span>{semesterCourses.length} courses · {credits} credits</span></header>
+                {semesterCourses.length ? semesterCourses.map((course) => <details className="academic-course-detail" id={`course-${course.id}`} key={course.id}>
+                  <summary><span>{course.course_code} · {course.course_name}</span><small>{course.credits} credits</small></summary>
+                  <div>
+                    <p>{course.description ?? "No description."}</p>
+                    {course.syllabus ? <pre>{course.syllabus}</pre> : null}
+                    <strong>Course outcomes</strong>
+                    <div className="co-list">{(courseOutcomes[course.id] ?? []).length ? (courseOutcomes[course.id] ?? []).map((outcome) => <span key={outcome.id}><b>{outcome.co_code}</b> {outcome.description}</span>) : <span>No course outcomes.</span>}</div>
+                  </div>
+                </details>) : <p className="academic-empty">No courses in this semester.</p>}
+              </article>;
+            })}
+          </div>
+        </div>
+        <div className="academic-panel">
+          <h2>Dependency graph</h2>
+          <CurriculumGraph courses={courses} prerequisites={prerequisites} courseOutcomes={courseOutcomes} />
+        </div>
       </section>}
       {tab === "outcomes" && <section className="academic-workspace"><div className="academic-panel"><h2>Program outcomes</h2><OutcomeList title="POs" rows={programOutcomes} codeKey="po_code" canReview={canReview} busy={busy} onUpdate={(event, row) => void updateOutcome("po", row.id, event)} onStatus={(row, status) => void run(() => api.updateOutcomeVersionStatus("po", row.id, row.current_version!.id, status), `PO ${status.toLowerCase()}.`)} /><OutcomeList title="PEOs" rows={peos} codeKey="peo_code" canReview={canReview} busy={busy} onUpdate={(event, row) => void updateOutcome("peo", row.id, event)} onStatus={(row, status) => void run(() => api.updateOutcomeVersionStatus("peo", row.id, row.current_version!.id, status), `PEO ${status.toLowerCase()}.`)} /></div>{canReview && <div className="academic-panel"><h2>Add outcomes</h2><OutcomeForm title="Program outcome" codeLabel="PO code" onSubmit={(event) => createOutcome(event, "po")} busy={busy} /><OutcomeForm title="Program educational objective" codeLabel="PEO code" onSubmit={(event) => createOutcome(event, "peo")} busy={busy} /></div>}</section>}
       {tab === "mappings" && <section className="academic-workspace"><div className="academic-panel"><h2>CO–PO mappings</h2>{mappings.length ? <div className="academic-list">{mappings.map((mapping) => <article className="academic-row" key={mapping.id}><div><strong>{mapping.course_code} · {mapping.co_code} → {mapping.po_code}</strong><p>{mapping.current_version?.mapping_level_name ?? "No level"} · {mapping.status.toLowerCase()} · {mapping.current_version?.status.toLowerCase()}</p></div>{canReview && mapping.current_version && mapping.current_version.status !== "APPROVED" && <select aria-label={`Review mapping ${mapping.co_code} to ${mapping.po_code}`} value="" onChange={(event) => void run(() => api.updateMappingVersionStatus(mapping.id, mapping.current_version!.id, event.target.value), `Mapping ${event.target.value.toLowerCase()}.`)}><option value="" disabled>Change status</option>{mapping.current_version.status === "DRAFT" && <option value="PROPOSED">Propose</option>}{mapping.current_version.status === "PROPOSED" && <><option value="APPROVED">Approve</option><option value="REJECTED">Reject</option></>}</select>}</article>)}</div> : <p className="academic-empty">No mappings for this version.</p>}{editable && mappings.length ? <details className="academic-manage-list"><summary>Manage mapping levels</summary>{mappings.filter((mapping) => mapping.status === "ACTIVE").map((mapping) => <div className="academic-manage-row" key={mapping.id}><span>{mapping.course_code} · {mapping.co_code} → {mapping.po_code}</span><form onSubmit={(event) => updateMappingLevel(event, mapping.id)}><select name="level" defaultValue={mapping.current_version?.mapping_level_code ?? levels[0]?.code}>{levels.map((level) => <option key={level.code} value={level.code}>{level.name}</option>)}</select><button disabled={busy || mapping.current_version?.status === "PROPOSED"}>Update</button></form><button className="academic-danger" type="button" disabled={busy} onClick={() => void removeMapping(mapping.id)}>Remove</button></div>)}</details> : null}</div>{editable && <form className="academic-panel" onSubmit={createCoPoMapping}><h2>Add mapping</h2><div className="academic-fields academic-fields--one"><label>Course outcome<select name="co_id" required>{allOutcomes.map((co) => <option key={co.id} value={co.id}>{co.course_code} · {co.co_code}</option>)}</select></label><label>Program outcome<select name="po_id" required>{programOutcomes.filter((po) => po.status === "ACTIVE").map((po) => <option key={po.id} value={po.id}>{po.po_code} · {po.current_version?.description}</option>)}</select></label><label>Mapping level<select name="level" required>{levels.map((level) => <option key={level.code} value={level.code}>{level.name} ({level.numeric_value})</option>)}</select></label></div><button disabled={busy || !allOutcomes.length || !programOutcomes.length}>Create mapping</button></form>}</section>}
