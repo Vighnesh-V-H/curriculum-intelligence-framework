@@ -111,7 +111,7 @@ export default function CurriculaPage() {
   }, [loadVersionData]);
 
   async function run(action: () => Promise<unknown>, success: string) {
-    setBusy(true); setError(""); setNotice("");
+    setBusy(true); setError(""); setNotice(""); setComparisonResult(null);
     try { await action(); setNotice(success); await loadDetail(); await loadVersionData(); }
     catch (caught) { setError(message(caught)); }
     finally { setBusy(false); }
