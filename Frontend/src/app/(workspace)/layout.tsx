@@ -81,7 +81,9 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
               ? "verification"
               : pathname.startsWith("/curricula")
                 ? "curricula"
-                : "dashboard"
+                : pathname.startsWith("/users")
+                  ? "users"
+                  : "dashboard"
       }
       user={user}
       onSignOut={handleSignOut}

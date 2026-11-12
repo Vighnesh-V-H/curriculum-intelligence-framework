@@ -9,6 +9,7 @@ import {
   LogOut,
   SearchCheck,
   Sparkles,
+  Users,
 } from "lucide-react";
 
 import {
@@ -28,12 +29,50 @@ import {
 import type { User } from "@/lib/api";
 import { ThemeToggle } from "@/components/theme-toggle";
 
-const NAV_ITEMS = [
+export type WorkspaceSection =
+  | "dashboard"
+  | "documents"
+  | "drafts"
+  | "verification"
+  | "curricula"
+  | "users";
+
+type NavItem = {
+  href: string;
+  label: string;
+  key: WorkspaceSection;
+  Icon: typeof BookOpenText;
+};
+
+const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Overview", key: "dashboard", Icon: BookOpenText },
   { href: "/documents", label: "Documents", key: "documents", Icon: FileStack },
   { href: "/curricula", label: "Curricula", key: "curricula", Icon: Layers3 },
   { href: "/verification", label: "Verification", key: "verification", Icon: SearchCheck },
-] as const;
+];
+
+const USERS_NAV_ITEM: NavItem = {
+  href: "/users",
+  label: "Users",
+  key: "users",
+  Icon: Users,
+};
+
+const DRAFTS_NAV_ITEM: NavItem = {
+  href: "/curriculum-drafts/new",
+  label: "Draft studio",
+  key: "drafts",
+  Icon: Sparkles,
+};
+
+const SECTION_LABELS: Record<WorkspaceSection, string> = {
+  dashboard: "Overview",
+  documents: "Documents",
+  drafts: "Draft studio",
+  verification: "Verification",
+  curricula: "Curricula",
+  users: "Users",
+};
 
 export function WorkspaceNav({
   active,
@@ -42,15 +81,19 @@ export function WorkspaceNav({
   onGenerate,
   children,
 }: {
-  active: "dashboard" | "documents" | "drafts" | "verification" | "curricula";
+  active: WorkspaceSection;
   user: User;
   onSignOut: () => void;
   onGenerate?: () => void;
   children: ReactNode;
 }) {
-  const navItems = onGenerate
-    ? [...NAV_ITEMS, { href: "/curriculum-drafts/new", label: "Draft studio", key: "drafts", Icon: Sparkles }]
-    : NAV_ITEMS;
+  const navItems = [...NAV_ITEMS];
+  if (user.roles.includes("ADMIN")) {
+    navItems.push(USERS_NAV_ITEM);
+  }
+  if (onGenerate) {
+    navItems.push(DRAFTS_NAV_ITEM);
+  }
 
   return (
     <SidebarProvider className="workspace-provider">
@@ -106,7 +149,7 @@ export function WorkspaceNav({
         <header className="workspace-topbar">
           <div className="topbar-context">
             <SidebarTrigger className="topbar-sidebar-trigger" />
-            <div className="workspace-crumb"><span>Workspace</span><i>/</i>{active === "dashboard" ? "Overview" : active === "documents" ? "Documents" : active === "verification" ? "Verification" : active === "curricula" ? "Curricula" : "Draft studio"}</div>
+            <div className="workspace-crumb"><span>Workspace</span><i>/</i>{SECTION_LABELS[active]}</div>
           </div>
           <div className="topbar-actions">
             <ThemeToggle />

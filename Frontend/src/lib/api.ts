@@ -2,12 +2,16 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export const TOKEN_KEY = "curriculum_access_token";
 
+export type RoleCode = "ADMIN" | "COMMITTEE_MEMBER" | "FACULTY" | "REVIEWER";
+
+export type UserStatus = "ACTIVE" | "INACTIVE" | "LOCKED";
+
 export type User = {
   id: string;
   username: string;
   email: string;
   full_name: string;
-  status: "ACTIVE" | "INACTIVE" | "LOCKED";
+  status: UserStatus;
   roles: string[];
   last_login_at: string | null;
   created_at: string;
@@ -305,6 +309,30 @@ export const api = {
   },
   listUsers(): Promise<User[]> {
     return request<User[]>("/api/v1/users");
+  },
+  createUser(payload: {
+    username: string;
+    email: string;
+    password: string;
+    full_name: string;
+    roles: RoleCode[];
+  }): Promise<User> {
+    return request<User>("/api/v1/users", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  assignUserRoles(userId: string, roles: RoleCode[]): Promise<User> {
+    return request<User>(`/api/v1/users/${userId}/roles`, {
+      method: "PUT",
+      body: JSON.stringify({ roles }),
+    });
+  },
+  updateUserStatus(userId: string, status: UserStatus): Promise<User> {
+    return request<User>(`/api/v1/users/${userId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    });
   },
   listCurricula(): Promise<Curriculum[]> {
     return request<Curriculum[]>("/api/v1/curricula");
