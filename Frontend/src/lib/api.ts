@@ -62,6 +62,32 @@ export type CurriculumVersion = {
   courses: Course[];
 };
 
+export type CurriculumVersionSummary = {
+  id: string;
+  version_label: string;
+  status: string;
+  previous_version_id: string | null;
+  created_at: string;
+  published_at: string | null;
+};
+
+export type FieldChange = { before: unknown; after: unknown };
+
+export type ModifiedCourse = {
+  course_code: string;
+  course_name: string;
+  changes: Record<string, FieldChange>;
+};
+
+export type VersionComparison = {
+  curriculum_id: string;
+  base_version: CurriculumVersionSummary;
+  target_version: CurriculumVersionSummary;
+  added_courses: Course[];
+  removed_courses: Course[];
+  modified_courses: ModifiedCourse[];
+};
+
 export type Course = {
   id: string;
   curriculum_version_id: string;
@@ -370,9 +396,9 @@ export const api = {
   updateCurriculumVersionStatus(curriculumId: string, versionId: string, status: string): Promise<CurriculumVersion> {
     return request<CurriculumVersion>(`/api/v1/curricula/${curriculumId}/versions/${versionId}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
   },
-  compareCurriculumVersions(curriculumId: string, baseId: string, targetId: string): Promise<{ added_courses: Course[]; removed_courses: Course[]; modified_courses: { course_code: string; changes: Record<string, { before: unknown; after: unknown }> }[] }> {
+  compareCurriculumVersions(curriculumId: string, baseId: string, targetId: string): Promise<VersionComparison> {
     const params = new URLSearchParams({ base_version_id: baseId, target_version_id: targetId });
-    return request(`/api/v1/curricula/${curriculumId}/compare?${params}`);
+    return request<VersionComparison>(`/api/v1/curricula/${curriculumId}/compare?${params}`);
   },
   createCourse(curriculumId: string, versionId: string, payload: Record<string, unknown>): Promise<Course> {
     return request(`/api/v1/curricula/${curriculumId}/versions/${versionId}/courses`, { method: "POST", body: JSON.stringify(payload) });
