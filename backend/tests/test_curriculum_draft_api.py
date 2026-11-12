@@ -428,6 +428,92 @@ def test_save_reviewed_draft_persists_normalized_curriculum(client, faculty_toke
     assert all(row["current_version"]["status"] == "DRAFT" for row in peos.json())
 
 
+def test_document_to_saved_curriculum_verification_report(
+    client, faculty_token, reviewer_token, program
+):
+    with SessionLocal() as session:
+        for number in (1, 2, 3):
+            session.add(
+                MappingLevel(
+                    code=f"LEVEL_{number}",
+                    name=f"Level {number}",
+                    numeric_value=number,
+                    is_active=True,
+                )
+            )
+        session.commit()
+
+    stub = StubDraftLLMClient()
+    override_llm(client, stub)
+    try:
+        generated = generate(
+            client,
+            faculty_token,
+            [
+                (
+                    "curriculum.txt",
+                    b"B.Tech CSE curriculum with semesters, courses, and CO-PO mappings.",
+                )
+            ],
+        )
+    finally:
+        release_llm(client)
+    assert generated.status_code == 200, generated.text
+    draft = generated.json()
+
+    saved = client.post(
+        "/api/v1/curriculum-drafts/save",
+        headers=bearer(faculty_token),
+        json={
+            "program_id": program["id"],
+            "academic_year": "2026-27",
+            "regulation": "E2E-2026",
+            "course_type_codes": {
+                "foundation": "CORE",
+                "core": "CORE",
+                "lab": "LAB",
+            },
+            "credits_by_course_code": {},
+            "draft": draft,
+        },
+    )
+    assert saved.status_code == 201, saved.text
+    curriculum = saved.json()
+    version = curriculum["versions"][0]
+
+    run_response = client.post(
+        f"/api/v1/curricula/{curriculum['id']}/versions/"
+        f"{version['id']}/verification-runs",
+        headers=bearer(reviewer_token),
+    )
+    assert run_response.status_code == 201, run_response.text
+    run = run_response.json()
+    assert run["status"] == "COMPLETED"
+
+    findings_response = client.get(
+        f"/api/v1/verification-runs/{run['id']}/findings",
+        headers=bearer(reviewer_token),
+    )
+    assert findings_response.status_code == 200
+    findings = findings_response.json()
+    assert findings
+
+    report_response = client.get(
+        f"/api/v1/verification-runs/{run['id']}/report?group_by=category",
+        headers=bearer(reviewer_token),
+    )
+    assert report_response.status_code == 200
+    report = report_response.json()
+    assert report["total_findings"] == len(findings)
+    assert sum(report["counts_by_category"].values()) == report["total_findings"]
+    assert sum(report["counts_by_severity"].values()) == report["total_findings"]
+    assert sum(report["counts_by_review_status"].values()) == report["total_findings"]
+    assert {group["key"] for group in report["groups"]} == set(
+        report["counts_by_category"]
+    )
+    assert all(group["findings"] for group in report["groups"])
+
+
 def test_save_draft_requires_type_for_each_category(client, faculty_token, program):
     response = client.post(
         "/api/v1/curriculum-drafts/save",

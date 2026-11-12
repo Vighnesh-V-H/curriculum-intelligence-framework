@@ -508,6 +508,39 @@ def test_ingest_repeatedly_overwrites_previous_results(client, faculty_token):
     assert second.json()["llm_analysis"] == {"summary": "second"}
 
 
+def test_failed_ingest_can_be_retried(client, faculty_token):
+    uploaded = upload_file(
+        client, faculty_token, filename="syllabus.txt", content=b"content"
+    )
+    document_id = uploaded.json()["id"]
+
+    override_llm(client, StubLLMClient(error=LLMResponseError("bad answer")))
+    try:
+        failed = client.post(
+            f"/api/v1/documents/{document_id}/ingest", headers=bearer(faculty_token)
+        )
+    finally:
+        release_llm(client)
+
+    assert failed.status_code == 200
+    assert failed.json()["status"] == "FAILED"
+    assert failed.json()["error_message"]
+
+    override_llm(client, StubLLMClient(result={"summary": "recovered"}))
+    try:
+        retried = client.post(
+            f"/api/v1/documents/{document_id}/ingest", headers=bearer(faculty_token)
+        )
+    finally:
+        release_llm(client)
+
+    assert retried.status_code == 200
+    body = retried.json()
+    assert body["status"] == "COMPLETED"
+    assert body["error_message"] is None
+    assert body["llm_analysis"] == {"summary": "recovered"}
+
+
 def test_reviewer_cannot_ingest(client, reviewer_token, faculty_token):
     uploaded = upload_file(
         client, faculty_token, filename="syllabus.txt", content=b"content"

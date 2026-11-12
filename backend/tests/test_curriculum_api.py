@@ -181,3 +181,161 @@ def test_unknown_curriculum_returns_404(client, faculty_token):
     )
 
     assert response.status_code == 404
+
+
+def test_update_curriculum_metadata(client, faculty_token, program):
+    created = client.post(
+        "/api/v1/curricula",
+        json=curriculum_payload(program["id"]),
+        headers=bearer(faculty_token),
+    ).json()
+
+    response = client.patch(
+        f"/api/v1/curricula/{created['id']}",
+        json={
+            "academic_year": "2027-28",
+            "regulation": "2027",
+            "title": "Revised CSE Curriculum",
+            "description": "Revised programme description.",
+            "duration_years": 3.5,
+        },
+        headers=bearer(faculty_token),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["academic_year"] == "2027-28"
+    assert body["regulation"] == "2027"
+    assert body["title"] == "Revised CSE Curriculum"
+    assert body["description"] == "Revised programme description."
+    assert body["duration_years"] == 3.5
+
+    fetched = client.get(
+        f"/api/v1/curricula/{created['id']}", headers=bearer(faculty_token)
+    )
+    assert fetched.json()["regulation"] == "2027"
+
+
+def test_update_curriculum_rejects_duplicate_regulation(client, faculty_token, program):
+    first = client.post(
+        "/api/v1/curricula",
+        json=curriculum_payload(program["id"], "2026"),
+        headers=bearer(faculty_token),
+    ).json()
+    second = client.post(
+        "/api/v1/curricula",
+        json=curriculum_payload(program["id"], "2027"),
+        headers=bearer(faculty_token),
+    ).json()
+
+    response = client.patch(
+        f"/api/v1/curricula/{second['id']}",
+        json={"regulation": first["regulation"]},
+        headers=bearer(faculty_token),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "curriculum_exists"
+
+
+def test_update_curriculum_requires_editable_draft(client, faculty_token, program):
+    created = client.post(
+        "/api/v1/curricula",
+        json=curriculum_payload(program["id"]),
+        headers=bearer(faculty_token),
+    ).json()
+    version = created["versions"][0]
+    review = client.patch(
+        f"/api/v1/curricula/{created['id']}/versions/{version['id']}/status",
+        json={"status": "UNDER_REVIEW"},
+        headers=bearer(faculty_token),
+    )
+    assert review.status_code == 200
+
+    response = client.patch(
+        f"/api/v1/curricula/{created['id']}",
+        json={"title": "Should not apply"},
+        headers=bearer(faculty_token),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "version_not_editable"
+
+
+def test_update_and_remove_course_outcome(client, faculty_token, program):
+    created = client.post(
+        "/api/v1/curricula",
+        json=curriculum_payload(program["id"]),
+        headers=bearer(faculty_token),
+    ).json()
+    version = created["versions"][0]
+    course = version["courses"][0]
+    outcome_url = (
+        f"/api/v1/curricula/{created['id']}/versions/{version['id']}"
+        f"/courses/{course['id']}/outcomes"
+    )
+    created_outcome = client.post(
+        outcome_url,
+        json={"co_code": "co1", "description": "Original statement"},
+        headers=bearer(faculty_token),
+    )
+    assert created_outcome.status_code == 201
+    outcome = created_outcome.json()
+    assert outcome["co_code"] == "CO1"
+
+    updated = client.patch(
+        f"{outcome_url}/{outcome['id']}",
+        json={"co_code": "co2", "description": "Revised statement"},
+        headers=bearer(faculty_token),
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["co_code"] == "CO2"
+    assert updated.json()["description"] == "Revised statement"
+
+    removed = client.delete(
+        f"{outcome_url}/{outcome['id']}", headers=bearer(faculty_token)
+    )
+    assert removed.status_code == 204
+
+    listed = client.get(outcome_url, headers=bearer(faculty_token))
+    assert listed.status_code == 200
+    assert listed.json() == []
+
+    repeated = client.delete(
+        f"{outcome_url}/{outcome['id']}", headers=bearer(faculty_token)
+    )
+    assert repeated.status_code == 404
+
+
+def test_update_course_outcome_rejects_duplicate_code(client, faculty_token, program):
+    created = client.post(
+        "/api/v1/curricula",
+        json=curriculum_payload(program["id"]),
+        headers=bearer(faculty_token),
+    ).json()
+    version = created["versions"][0]
+    course = version["courses"][0]
+    outcome_url = (
+        f"/api/v1/curricula/{created['id']}/versions/{version['id']}"
+        f"/courses/{course['id']}/outcomes"
+    )
+    first = client.post(
+        outcome_url,
+        json={"co_code": "CO1", "description": "First outcome"},
+        headers=bearer(faculty_token),
+    ).json()
+    second = client.post(
+        outcome_url,
+        json={"co_code": "CO2", "description": "Second outcome"},
+        headers=bearer(faculty_token),
+    ).json()
+
+    response = client.patch(
+        f"{outcome_url}/{second['id']}",
+        json={"co_code": first["co_code"]},
+        headers=bearer(faculty_token),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "course_outcome_exists"
