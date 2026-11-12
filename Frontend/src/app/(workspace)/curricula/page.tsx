@@ -25,6 +25,7 @@ export default function CurriculaPage() {
   const [versionId, setVersionId] = useState("");
   const [tab, setTab] = useState<Tab>("courses");
   const [createOpen, setCreateOpen] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(false);
   const [comparison, setComparison] = useState("");
   const [comparisonResult, setComparisonResult] = useState<VersionComparison | null>(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
@@ -60,6 +61,7 @@ export default function CurriculaPage() {
         setUserRoles(me.roles);
         setPrograms(progs);
         setDepartments(depts);
+        setSetupOpen(!depts.length || !progs.length);
         setCourseTypes(types);
         setCurricula(rows);
         setLevels(mapLevels);
@@ -171,14 +173,20 @@ export default function CurriculaPage() {
   }
 
   async function createDepartment(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const form = new FormData(event.currentTarget); setBusy(true); setError("");
-    try { const created = await api.createDepartment({ code: String(form.get("code")), name: String(form.get("name")) }); setDepartments((items) => [...items, created]); setNotice("Department created."); event.currentTarget.reset(); }
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    setBusy(true); setError(""); setNotice("");
+    try { const created = await api.createDepartment({ code: String(form.get("code")), name: String(form.get("name")) }); setDepartments((items) => [...items, created]); setNotice("Department created."); formElement.reset(); }
     catch (caught) { setError(message(caught)); } finally { setBusy(false); }
   }
 
   async function createProgram(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const form = new FormData(event.currentTarget); setBusy(true); setError("");
-    try { const created = await api.createProgram({ department_id: String(form.get("department_id")), code: String(form.get("code")), name: String(form.get("name")), degree_type: String(form.get("degree_type")) || undefined, duration_years: Number(form.get("duration_years")) }); setPrograms((items) => [...items, created]); setNotice("Program created."); event.currentTarget.reset(); }
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    setBusy(true); setError(""); setNotice("");
+    try { const created = await api.createProgram({ department_id: String(form.get("department_id")), code: String(form.get("code")), name: String(form.get("name")), degree_type: String(form.get("degree_type")) || undefined, duration_years: Number(form.get("duration_years")) }); setPrograms((items) => [...items, created]); setNotice("Program created."); formElement.reset(); }
     catch (caught) { setError(message(caught)); } finally { setBusy(false); }
   }
 
@@ -290,7 +298,34 @@ export default function CurriculaPage() {
     </header>
     {error && <p className="academic-alert academic-alert--error" role="alert">{error}</p>}
     {notice && <p className="academic-alert" role="status">{notice}</p>}
-    {canReview && (!departments.length || !programs.length) && <section className="academic-workspace academic-bootstrap">{!departments.length && <form className="academic-panel" onSubmit={createDepartment}><h2>Set up a department</h2><p>Start here if your database has no department yet.</p><div className="academic-fields academic-fields--one"><label>Department code<input name="code" required /></label><label>Department name<input name="name" required /></label></div><button disabled={busy}>Create department</button></form>}{departments.length > 0 && !programs.length && <form className="academic-panel" onSubmit={createProgram}><h2>Add a program</h2><div className="academic-fields academic-fields--one"><label>Department<select name="department_id">{departments.map((department) => <option key={department.id} value={department.id}>{department.code} · {department.name}</option>)}</select></label><label>Program code<input name="code" required /></label><label>Program name<input name="name" required /></label><label>Degree type<input name="degree_type" /></label><label>Duration (years)<input name="duration_years" type="number" min="0.5" max="10" step="0.5" defaultValue="4" required /></label></div><button disabled={busy}>Create program</button></form>}</section>}
+    {canReview && <details className="academic-setup" open={setupOpen} onToggle={(event) => setSetupOpen(event.currentTarget.open)}>
+      <summary>Departments and programs</summary>
+      <div className="academic-workspace academic-bootstrap">
+        <form className="academic-panel" onSubmit={createDepartment}>
+          <h2>Add a department</h2>
+          <p>Departments group the programs that curricula belong to.</p>
+          <div className="academic-fields academic-fields--one">
+            <label>Department code<input name="code" required /></label>
+            <label>Department name<input name="name" required /></label>
+          </div>
+          <button disabled={busy}>Create department</button>
+        </form>
+        <form className="academic-panel" onSubmit={createProgram}>
+          <h2>Add a program</h2>
+          {departments.length ? <>
+            <p>Programs provide the academic context for a curriculum.</p>
+            <div className="academic-fields academic-fields--one">
+              <label>Department<select name="department_id">{departments.map((department) => <option key={department.id} value={department.id}>{department.code} · {department.name}</option>)}</select></label>
+              <label>Program code<input name="code" required /></label>
+              <label>Program name<input name="name" required /></label>
+              <label>Degree type<input name="degree_type" /></label>
+              <label>Duration (years)<input name="duration_years" type="number" min="0.5" max="10" step="0.5" defaultValue="4" required /></label>
+            </div>
+            <button disabled={busy}>Create program</button>
+          </> : <p className="academic-empty">Create a department first, then add its programs here.</p>}
+        </form>
+      </div>
+    </details>}
     {canWrite && (createOpen || !curricula.length) && <form className="academic-panel academic-create-form" onSubmit={createCurriculum}>
       <h2>New curriculum</h2><div className="academic-fields">
         <label>Program<select name="program_id" required defaultValue=""><option value="" disabled>Choose a program</option>{programs.map((item) => <option key={item.id} value={item.id}>{item.code} — {item.name}</option>)}</select></label>
@@ -300,7 +335,7 @@ export default function CurriculaPage() {
         <label>Duration (years)<input name="duration_years" type="number" min="0.5" max="10" step="0.5" defaultValue="4" required /></label>
         <label>Semesters<input name="semester_count" type="number" min="1" max="30" defaultValue="8" required /></label>
       </div><button disabled={busy || !programs.length}>{busy ? "Saving…" : "Create draft curriculum"}</button>
-      {!programs.length && <small>Create a department and program first in the backend or seed data.</small>}
+      {!programs.length && <small>{canReview ? "Use Academic setup to create a department and program first." : "Ask a committee member or administrator to create a department and program first."}</small>}
     </form>}
     {detail && <>
       <section className="academic-summary"><div><small>Program</small><strong>{detail.program_code} · {detail.program_name}</strong></div><div><small>Regulation</small><strong>{detail.regulation}</strong></div><div><small>Academic year</small><strong>{detail.academic_year}</strong></div>
