@@ -21,49 +21,56 @@ This file tracks work still needed to complete the Curriculum Intelligence and V
 - [x] Provide report API responses grouped by category, severity, or review status, with filtered counts.
 
 ### 4. Document-to-curriculum workflow
-- [ ] Complete the workflow from uploaded document and extracted content to a validated, editable curriculum draft.
+- [x] Complete the workflow from uploaded document and extracted content to a validated, editable curriculum draft.
 - [x] Add an explicit save action that persists the preview as curriculum/version 1.0 with courses, outcomes, PEOs, POs, and draft mappings.
 - [x] Add in-place editing of semester/course/CO/PEO/PO content and CO–PO mapping strength before save; backend validation remains authoritative.
-- Define handling for unsupported or scanned documents; OCR is currently unsupported.
-- Ensure ingestion and draft-generation failures are traceable and can be retried safely.
+- [x] Define handling for unsupported or scanned documents; OCR is intentionally unsupported and files without extractable text fail with a clear error.
+- [x] Ensure ingestion and draft-generation failures are traceable and can be retried safely.
 
 ### 5. Backend validation and tests
-- Add tests for each new analysis module, graph behavior, review permissions, and failure cases.
-- Add integration tests for document-to-draft-to-curriculum and verification/report workflows.
-- Establish evaluation datasets and measures for extraction quality, analysis accuracy, and false positives.
+- [x] Add tests for each new analysis module, graph behavior, review permissions, and failure cases.
+- [x] Add integration tests for document-to-draft-to-curriculum and verification/report workflows.
+- [ ] Establish evaluation datasets and measures for extraction quality, analysis accuracy, and false positives (blocked: requires domain-owned labelled data).
 
 ## Frontend
 
 ### 1. Curriculum management
 - [x] Add a test workspace for curriculum creation, course/course-outcome management, version status, and comparisons.
-- [ ] Complete curriculum metadata editing and expose all course-outcome update/remove operations.
-- [ ] Respect backend authorization and version-state rules; the frontend must not be the authority for access control (API enforcement remains authoritative).
+- [x] Complete curriculum metadata editing and expose all course-outcome update/remove operations.
+- [x] Respect backend authorization and version-state rules; the frontend must not be the authority for access control (API enforcement remains authoritative).
 
 ### 2. Outcomes and mappings
 - [x] Add UI to create POs/PEOs, advance outcome versions through review, and create/review CO–PO mappings.
-- [ ] Add outcome metadata/status editing and mapping-level update/removal controls.
+- [x] Add outcome metadata/status editing and mapping-level update/removal controls.
 
 ### 3. Verification experience
-- Build a verification-run workflow and display run status and summaries.
-- Display findings with category, severity, confidence, evidence, related curriculum entities, and recommendations.
+- [x] Build a verification-run workflow and display run status and summaries.
+- [x] Display findings with category, severity, confidence, evidence, related curriculum entities, and recommendations.
 - [x] Add authorized finding review actions and show the current review status/comment.
-- Provide a readable report view with filtering and grouping.
+- [x] Provide a readable report view with filtering and grouping.
 
 ### 4. Curriculum exploration
-- Add an interactive curriculum/dependency visualization and course details view, once the backend graph/query contract is defined.
-- Provide accessible alternatives to visual-only information, including lists or tables.
+- [x] Add an interactive curriculum/dependency visualization and course details view using the relational curriculum contract.
+- [x] Provide accessible alternatives to visual-only information, including lists or tables.
 
 ### 5. Document and draft workflow
-- Complete the UI for uploading documents, tracking processing status, viewing extracted/analysis results, and handling failures.
-- Add a draft review/edit screen and an explicit save-to-curriculum flow; generated drafts must not be treated as saved curricula until confirmed.
+- [x] Complete the UI for uploading documents, tracking processing status, viewing extracted/analysis results, and handling failures.
+- [x] Add a draft review/edit screen and an explicit save-to-curriculum flow; generated drafts must not be treated as saved curricula until confirmed.
 
 ## Cross-cutting
 
-- Update the relevant requirements, LLDs, API contracts, and project status documentation as features are designed and implemented.
-- Add end-to-end tests covering the main user workflows across frontend and backend.
-- Define and run domain/expert validation for verification findings and recommendations.
-- Add production deployment/containerization configuration, operational documentation, and secure environment configuration.
+- [x] Update the relevant requirements, LLDs, API contracts, and project status documentation as features are designed and implemented.
+- [ ] Add end-to-end tests covering the main user workflows across frontend and backend (backend integration coverage exists; browser-level tests are not yet set up).
+- [ ] Define and run domain/expert validation for verification findings and recommendations (blocked: requires domain-expert reviewers and agreed evaluation criteria).
+- [ ] Add production deployment/containerization configuration, operational documentation, and secure environment configuration (separate infrastructure decision).
+
+## Blocked or deferred
+
+- Extended FR-14 verification (topic overlap/progression, skills/competency, configurable balance thresholds, and OBE/accreditation/industry comparisons) is deferred until institutional rules and governed reference datasets are defined.
+- Extraction-quality and analysis-accuracy evaluation requires labelled datasets reviewed by domain experts.
+- OCR for scanned documents is explicitly out of scope; such files fail with a clear "no extractable text" error.
+- Browser-level end-to-end tests and production deployment remain separate follow-up work.
 
 ## Current baseline
 
-The repository already has authentication, relational curriculum/version management, course outcomes, Program Outcome/PEO and CO–PO management, prerequisite management and prerequisite verification, document upload/LLM processing, and AI-assisted curriculum draft generation. The frontend now includes authentication, documents, draft generation, verification review, and an initial curriculum/outcomes/mappings/prerequisites workspace. The workspace enables interactive testing of common backend paths but does not yet cover every backend operation. This backlog lists remaining work.
+The repository already has authentication, relational curriculum/version management, course outcomes, Program Outcome/PEO and CO–PO management, prerequisite management and prerequisite verification, document upload/LLM processing, and AI-assisted curriculum draft generation. The frontend covers authentication, documents with processing status and retry, draft generation and review, verification review with grouped reports, and a curriculum workspace with metadata/CO/PO/PEO/mapping editing, structure summaries, and accessible dependency exploration. Backend tests cover curriculum editing, mapping lifecycle rules, prerequisite removal, document retry, and the document-to-draft-to-saved-curriculum-to-verification-report flow. This backlog lists remaining work.
