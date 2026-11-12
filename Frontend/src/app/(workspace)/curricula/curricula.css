@@ -66,5 +66,24 @@
 .academic-outcomes h3, .academic-inline-form h3 { margin: 0 0 8px; font-size: 12px; font-weight: 600; }
 .academic-inline-form { display: grid; gap: 10px; padding: 14px 0; border-top: 1px solid var(--border); }
 .academic-actions { display: flex; gap: 7px; }
+.academic-meta-edit { margin: -4px 0 19px; padding: 13px 16px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); }
+.academic-meta-edit summary { color: var(--primary); font-size: 11px; cursor: pointer; }
+.academic-meta-edit form { margin-top: 12px; }
+.academic-meta-description { grid-column: 1 / -1; }
+.academic-co-manage, .academic-manage-list, .academic-outcome-edit { width: 100%; padding: 7px; border: 1px solid var(--border); border-radius: 5px; }
+.academic-co-manage summary, .academic-manage-list summary, .academic-outcome-edit summary { color: var(--primary); font-size: 10px; cursor: pointer; }
+.academic-co-edit { display: grid; gap: 7px; margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--border); }
+.academic-co-edit form, .academic-outcome-edit form { display: grid; gap: 6px; margin-top: 8px; }
+.academic-co-edit label, .academic-outcome-edit label { display: grid; gap: 4px; color: var(--muted-foreground); font-size: 10px; }
+.academic-co-edit input, .academic-co-edit textarea, .academic-outcome-edit input, .academic-outcome-edit textarea { min-height: 30px; padding: 5px; font-size: 10px; }
+.academic-co-edit > button { justify-self: start; }
+.academic-outcome-actions { display: grid; gap: 8px; justify-items: end; flex: 0 0 auto; }
+.academic-outcome-edit { min-width: 220px; }
+.academic-manage-list { margin-top: 14px; }
+.academic-manage-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 7px; margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--border); }
+.academic-manage-row span { color: var(--muted-foreground); font-size: 10px; }
+.academic-manage-row form { display: flex; gap: 5px; }
+.academic-manage-row select { min-height: 31px; padding: 4px 6px; font-size: 10px; }
+.academic-manage-row button { min-height: 31px; padding: 0 8px; font-size: 10px; }
 @media (max-width: 850px) { .academic-workspace { grid-template-columns: 1fr; } .academic-summary { grid-template-columns: repeat(2, minmax(0,1fr)); } .academic-fields { grid-template-columns: repeat(2, minmax(0,1fr)); } }
-@media (max-width: 560px) { .academic-heading { align-items: stretch; flex-direction: column; } .academic-heading-actions { align-items: stretch; flex-direction: column; } .academic-picker { min-width: 0; } .academic-fields, .academic-summary { grid-template-columns: 1fr; } .academic-row { flex-direction: column; } .academic-course-actions { width: 100%; justify-items: stretch; } .academic-co-form { grid-template-columns: 68px minmax(0, 1fr); } .academic-co-form button { grid-column: 1 / -1; } }
+@media (max-width: 560px) { .academic-heading { align-items: stretch; flex-direction: column; } .academic-heading-actions { align-items: stretch; flex-direction: column; } .academic-picker { min-width: 0; } .academic-fields, .academic-summary { grid-template-columns: 1fr; } .academic-row { flex-direction: column; } .academic-course-actions, .academic-outcome-actions { width: 100%; justify-items: stretch; } .academic-outcome-edit, .academic-edit-course { min-width: 0; } .academic-co-form { grid-template-columns: 68px minmax(0, 1fr); } .academic-co-form button { grid-column: 1 / -1; } .academic-manage-row { grid-template-columns: 1fr; } }
