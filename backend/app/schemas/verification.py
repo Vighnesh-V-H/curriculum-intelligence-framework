@@ -106,9 +106,18 @@ class VerificationRunResponse(BaseModel):
     completed_at: datetime | None
     error_message: str | None
     summary: dict[str, Any] | None
+    input_fingerprint: str | None = None
+    is_stale: bool = False
 
     @classmethod
-    def from_model(cls, run: VerificationRun) -> VerificationRunResponse:
+    def from_model(
+        cls,
+        run: VerificationRun,
+        *,
+        is_stale: bool = False,
+    ) -> VerificationRunResponse:
+        summary = run.summary or {}
+        fingerprint = summary.get("input_fingerprint")
         return cls(
             id=run.id,
             curriculum_version_id=run.curriculum_version_id,
@@ -119,4 +128,6 @@ class VerificationRunResponse(BaseModel):
             completed_at=run.completed_at,
             error_message=run.error_message,
             summary=run.summary,
+            input_fingerprint=fingerprint if isinstance(fingerprint, str) else None,
+            is_stale=is_stale,
         )

@@ -50,6 +50,7 @@ from app.repositories.verification import (
     VerificationFindingRepository,
     VerificationRunRepository,
 )
+from app.repositories.verification_references import VerificationReferenceRepository
 from app.services.academic import AcademicService
 from app.services.auth import AuthService
 from app.services.curriculum import CurriculumService
@@ -66,6 +67,7 @@ from app.services.prerequisites import PrerequisiteService
 from app.services.uploadthing import UploadThingClient, build_uploadthing_client
 from app.services.users import UserService
 from app.services.verification import VerificationService
+from app.services.verification_references import VerificationReferenceService
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -319,6 +321,22 @@ def get_verification_finding_repository(
     return VerificationFindingRepository(session)
 
 
+def get_verification_reference_repository(
+    session: Session = Depends(get_db),
+) -> VerificationReferenceRepository:
+    return VerificationReferenceRepository(session)
+
+
+def get_verification_reference_service(
+    session: Session = Depends(get_db),
+    references: VerificationReferenceRepository = Depends(
+        get_verification_reference_repository
+    ),
+    audit_logs: AuditLogRepository = Depends(get_audit_log_repository),
+) -> VerificationReferenceService:
+    return VerificationReferenceService(session, references, audit_logs)
+
+
 def get_document_repository(session: Session = Depends(get_db)) -> DocumentRepository:
     return DocumentRepository(session)
 
@@ -429,6 +447,9 @@ def get_verification_service(
     prerequisites: CoursePrerequisiteRepository = Depends(get_prerequisite_repository),
     runs: VerificationRunRepository = Depends(get_verification_run_repository),
     findings: VerificationFindingRepository = Depends(get_verification_finding_repository),
+    references: VerificationReferenceRepository = Depends(
+        get_verification_reference_repository
+    ),
     audit_logs: AuditLogRepository = Depends(get_audit_log_repository),
 ) -> VerificationService:
     return VerificationService(
@@ -439,6 +460,7 @@ def get_verification_service(
         prerequisites,
         runs,
         findings,
+        references,
         audit_logs,
     )
 

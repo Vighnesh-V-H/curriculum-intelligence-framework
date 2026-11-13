@@ -12,6 +12,7 @@ from app.api.v1 import (
     prerequisites,
     users,
     verification,
+    verification_references,
 )
 
 api_router = APIRouter()
@@ -28,3 +29,4 @@ api_router.include_router(prerequisites.router)
 api_router.include_router(verification.router)
 api_router.include_router(verification.run_router)
 api_router.include_router(verification.finding_router)
+api_router.include_router(verification_references.router)

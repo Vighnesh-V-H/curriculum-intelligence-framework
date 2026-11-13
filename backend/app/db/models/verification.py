@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any
@@ -7,12 +7,14 @@ from typing import Any
 from sqlalchemy import (
     JSON,
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Index,
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     Uuid,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -61,6 +63,68 @@ class ReferenceEntityType(StrEnum):
     PEO = "PEO"
     CO_PO_MAPPING = "CO_PO_MAPPING"
     PREREQUISITE = "PREREQUISITE"
+    VERIFICATION_REFERENCE = "VERIFICATION_REFERENCE"
+
+
+class VerificationReferenceType(StrEnum):
+    OBE = "OBE"
+    ACCREDITATION = "ACCREDITATION"
+    INDUSTRY = "INDUSTRY"
+    INSTITUTIONAL = "INSTITUTIONAL"
+
+
+class VerificationReferenceStatus(StrEnum):
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+
+
+class VerificationReference(Base):
+    """Governed OBE, accreditation, industry, or institutional rules.
+
+    A reference with no ``program_id`` applies institution-wide. A
+    program-specific reference with the same type and code overrides the
+    institution-wide reference for that program.
+    """
+
+    __tablename__ = "verification_references"
+    __table_args__ = (
+        UniqueConstraint(
+            "program_id",
+            "reference_type",
+            "code",
+            "version_label",
+            name="uq_verification_references_scope",
+        ),
+        Index(
+            "idx_verification_references_program",
+            "program_id",
+            "reference_type",
+            "status",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    program_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("programs.id", ondelete="CASCADE")
+    )
+    reference_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    code: Mapped[str] = mapped_column(String(50), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    source: Mapped[str] = mapped_column(String(300), nullable=False)
+    version_label: Mapped[str] = mapped_column(String(50), nullable=False, default="1.0")
+    effective_date: Mapped[date | None] = mapped_column(Date)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False, default="MEDIUM")
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=VerificationReferenceStatus.ACTIVE.value
+    )
+    rules: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_by: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
 
 
 class VerificationRun(Base):

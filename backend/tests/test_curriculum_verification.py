@@ -51,8 +51,16 @@ def test_verification_reports_structure_outcomes_and_credit_summary(
     assert run_response.status_code == 201
     run = run_response.json()
     assert run["status"] == "COMPLETED"
-    assert run["summary"]["analyzers"] == ["PREREQUISITE", "STRUCTURE", "OUTCOME_COVERAGE"]
+    assert run["summary"]["analyzers"] == [
+        "PREREQUISITE",
+        "CONTENT",
+        "STRUCTURE",
+        "OUTCOME_COVERAGE",
+        "REFERENCE_COMPARISON",
+    ]
     assert run["summary"]["credit_totals_by_semester"] == {"1": 4.0, "2": 0.0}
+    assert run["input_fingerprint"].startswith("sha256:")
+    assert run["is_stale"] is False
     assert run["summary"]["findings_by_category"] == {"OUTCOME": 1, "STRUCTURAL": 1}
 
     findings_response = client.get(
