@@ -11,16 +11,53 @@ from tests.conftest import bearer
 class StubDraftLLMClient:
     model = "stub-model"
 
-    def __init__(self, result: dict | None = None, error: Exception | None = None):
+    def __init__(
+        self,
+        result: dict | None = None,
+        error: Exception | None = None,
+        repair_result: dict | None = None,
+    ):
         self.result = result or make_draft_payload()
         self.error = error
+        self.repair_result = repair_result
         self.calls: list[str] = []
+        self.repair_calls: list[tuple[str, dict[str, Any], str]] = []
+        self.topic_calls: list[str] = []
+        self.topic_repair_calls: list[tuple[str, dict[str, Any], str]] = []
 
     def draft_curriculum(self, document_text: str) -> dict[str, Any]:
         self.calls.append(document_text)
         if self.error is not None:
             raise self.error
         return self.result
+
+    def draft_curriculum_from_topic(self, topic: str) -> dict[str, Any]:
+        self.topic_calls.append(topic)
+        if self.error is not None:
+            raise self.error
+        return self.result
+
+    def repair_curriculum_draft(
+        self,
+        document_text: str,
+        previous_payload: dict[str, Any],
+        validation_feedback: str,
+    ) -> dict[str, Any]:
+        self.repair_calls.append((document_text, previous_payload, validation_feedback))
+        if self.error is not None:
+            raise self.error
+        return self.repair_result or self.result
+
+    def repair_curriculum_draft_from_topic(
+        self,
+        topic: str,
+        previous_payload: dict[str, Any],
+        validation_feedback: str,
+    ) -> dict[str, Any]:
+        self.topic_repair_calls.append((topic, previous_payload, validation_feedback))
+        if self.error is not None:
+            raise self.error
+        return self.repair_result or self.result
 
 
 def override_llm(client, stub):
@@ -35,6 +72,14 @@ def generate(client, token, entries: list[tuple[str, bytes]]) -> Any:
     return client.post(
         "/api/v1/curriculum-drafts",
         files=[("files", (name, content, "text/plain")) for name, content in entries],
+        headers=bearer(token) if token else None,
+    )
+
+
+def generate_topic(client, token, topic: str) -> Any:
+    return client.post(
+        "/api/v1/curriculum-drafts",
+        data={"topic": topic},
         headers=bearer(token) if token else None,
     )
 
@@ -167,6 +212,27 @@ def make_draft_with_unknown_mapping_course() -> dict[str, Any]:
     return payload
 
 
+def make_draft_with_unmapped_outcome() -> dict[str, Any]:
+    payload = make_draft_payload()
+    payload["semesters"][0]["courses"][1]["outcomes"].append(
+        {"code": "CO2", "statement": "Apply integral calculus."}
+    )
+    return payload
+
+
+def make_repaired_draft() -> dict[str, Any]:
+    payload = make_draft_with_unmapped_outcome()
+    payload["mappings"].append(
+        {
+            "course_code": "MA101",
+            "course_outcome_code": "CO2",
+            "program_outcome_code": "PO2",
+            "level": 2,
+        }
+    )
+    return payload
+
+
 def make_minimal_pdf(text: str) -> bytes:
     content = f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET".encode("latin-1")
     objects = [
@@ -214,6 +280,11 @@ def test_reviewer_cannot_generate_draft(client, reviewer_token):
     assert response.status_code == 403
 
 
+def test_reviewer_cannot_generate_draft_from_topic(client, reviewer_token):
+    response = generate_topic(client, reviewer_token, "B.Tech in Artificial Intelligence")
+    assert response.status_code == 403
+
+
 def test_committee_member_and_admin_can_generate(client, committee_token, admin_token):
     for token in (committee_token, admin_token):
         stub = StubDraftLLMClient()
@@ -228,10 +299,25 @@ def test_committee_member_and_admin_can_generate(client, committee_token, admin_
 # ------------------------------------------------------------ file guards
 
 
-def test_generate_rejects_no_files(client, faculty_token):
+def test_generate_rejects_no_topic_or_files(client, faculty_token):
     response = client.post("/api/v1/curriculum-drafts", headers=bearer(faculty_token))
     assert response.status_code == 400
-    assert response.json()["error"]["code"] == "too_many_files"
+    assert response.json()["error"]["code"] == "missing_draft_source"
+
+
+def test_generate_rejects_blank_topic_without_files(client, faculty_token):
+    response = generate_topic(client, faculty_token, "   ")
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "missing_draft_source"
+
+
+def test_generate_rejects_invalid_topic_length(client, faculty_token):
+    short = generate_topic(client, faculty_token, "AI")
+    assert short.status_code == 400
+    assert short.json()["error"]["code"] == "invalid_topic"
+    too_long = generate_topic(client, faculty_token, "x" * 501)
+    assert too_long.status_code == 400
+    assert too_long.json()["error"]["code"] == "invalid_topic"
 
 
 def test_generate_rejects_too_many_files(client, faculty_token):
@@ -363,6 +449,71 @@ def test_generate_combines_multiple_documents(client, faculty_token):
     ]
 
 
+def test_generate_returns_draft_from_topic_brief(client, faculty_token):
+    stub = StubDraftLLMClient()
+    override_llm(client, stub)
+    try:
+        response = generate_topic(
+            client,
+            faculty_token,
+            "  B.Tech in Artificial Intelligence, 4 years, applied project focus  ",
+        )
+    finally:
+        release_llm(client)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["program"]["name"] == "B.Tech Computer Science and Engineering"
+    assert stub.topic_calls == [
+        "B.Tech in Artificial Intelligence, 4 years, applied project focus"
+    ]
+    assert stub.calls == []
+
+
+def test_generate_uses_topic_as_brief_with_documents(client, faculty_token):
+    stub = StubDraftLLMClient()
+    override_llm(client, stub)
+    try:
+        response = client.post(
+            "/api/v1/curriculum-drafts",
+            data={"topic": "Data science with an applied capstone"},
+            files=[("files", ("syllabus.txt", b"CS101 syllabus", "text/plain"))],
+            headers=bearer(faculty_token),
+        )
+    finally:
+        release_llm(client)
+
+    assert response.status_code == 200, response.text
+    assert stub.calls == [
+        "= Curriculum brief =\nData science with an applied capstone\n\n"
+        "= File: syllabus.txt =\nCS101 syllabus"
+    ]
+    assert stub.topic_calls == []
+
+
+def test_generate_repairs_topic_draft_with_missing_outcome_mapping(client, faculty_token):
+    invalid_payload = make_draft_with_unmapped_outcome()
+    stub = StubDraftLLMClient(result=invalid_payload, repair_result=make_repaired_draft())
+    override_llm(client, stub)
+    try:
+        response = generate_topic(
+            client, faculty_token, "B.Sc in Data Science, 3 years"
+        )
+    finally:
+        release_llm(client)
+
+    assert response.status_code == 200, response.text
+    assert len(response.json()["mappings"]) == 7
+    assert len(stub.topic_calls) == 1
+    assert len(stub.topic_repair_calls) == 1
+    topic, previous_payload, feedback = stub.topic_repair_calls[0]
+    assert topic == "B.Sc in Data Science, 3 years"
+    assert previous_payload == invalid_payload
+    assert "MA101" in feedback
+    assert "has no program outcome mapping" in feedback
+    assert stub.calls == []
+    assert stub.repair_calls == []
+
+
 def test_save_reviewed_draft_persists_normalized_curriculum(client, faculty_token, program):
     with SessionLocal() as session:
         for number in (1, 2, 3):
@@ -426,6 +577,14 @@ def test_save_reviewed_draft_persists_normalized_curriculum(client, faculty_toke
     assert len(peos.json()) == 3
     assert all(row["current_version"]["status"] == "DRAFT" for row in pos.json())
     assert all(row["current_version"]["status"] == "DRAFT" for row in peos.json())
+
+    listing = client.get("/api/v1/curricula", headers=bearer(faculty_token))
+    assert listing.status_code == 200
+    listed = next(row for row in listing.json() if row["id"] == body["id"])
+    assert listed["academic_year"] == "2026-27"
+    assert listed["regulation"] == "AI-2026"
+    assert listed["latest_version"]["status"] == "DRAFT"
+    assert listed["latest_version"]["version_label"] == "1.0"
 
 
 def test_document_to_saved_curriculum_verification_report(
@@ -557,7 +716,28 @@ def test_generate_supports_pdf_files(client, faculty_token):
 # ------------------------------------------------------------- llm errors
 
 
-def test_generate_rejects_invalid_llm_payload(client, faculty_token):
+def test_generate_repairs_draft_with_missing_outcome_mapping(client, faculty_token):
+    invalid_payload = make_draft_with_unmapped_outcome()
+    stub = StubDraftLLMClient(result=invalid_payload, repair_result=make_repaired_draft())
+    override_llm(client, stub)
+    try:
+        response = generate(client, faculty_token, [("syllabus.txt", b"content")])
+    finally:
+        release_llm(client)
+
+    assert response.status_code == 200, response.text
+    assert len(response.json()["mappings"]) == 7
+    assert len(stub.calls) == 1
+    assert len(stub.repair_calls) == 1
+    document_text, previous_payload, feedback = stub.repair_calls[0]
+    assert document_text == "= File: syllabus.txt =\ncontent"
+    assert previous_payload == invalid_payload
+    assert "MA101" in feedback
+    assert "CO2" in feedback
+    assert "has no program outcome mapping" in feedback
+
+
+def test_generate_rejects_invalid_llm_payload_after_repair(client, faculty_token):
     stub = StubDraftLLMClient(result=make_draft_with_unknown_mapping_course())
     override_llm(client, stub)
     try:
@@ -569,6 +749,10 @@ def test_generate_rejects_invalid_llm_payload(client, faculty_token):
     body = response.json()
     assert body["error"]["code"] == "llm_draft_failed"
     assert "invalid" in body["error"]["message"].lower()
+    assert "repair" in body["error"]["message"].lower()
+    assert "(at 'payload')" in body["error"]["message"]
+    assert len(stub.calls) == 1
+    assert len(stub.repair_calls) == 1
 
 
 def test_generate_rejects_draft_without_program_outcomes_or_mappings(client, faculty_token):
@@ -584,6 +768,7 @@ def test_generate_rejects_draft_without_program_outcomes_or_mappings(client, fac
 
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "llm_draft_failed"
+    assert len(stub.repair_calls) == 1
 
 
 def test_generate_llm_failure_returns_service_unavailable(client, faculty_token):
@@ -596,6 +781,7 @@ def test_generate_llm_failure_returns_service_unavailable(client, faculty_token)
 
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "llm_draft_failed"
+    assert stub.repair_calls == []
 
 
 def test_generate_without_llm_configuration_returns_service_unavailable(client, faculty_token):
@@ -608,3 +794,4 @@ def test_generate_without_llm_configuration_returns_service_unavailable(client, 
 
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "llm_not_configured"
+    assert stub.repair_calls == []

@@ -29,6 +29,9 @@ logger = logging.getLogger(__name__)
 
 _CHUNK_SIZE = 1024 * 1024
 _MAX_FILES = 5
+_MAX_TOPIC_CHARS = 500
+_MIN_TOPIC_CHARS = 3
+_MAX_DRAFT_ATTEMPTS = 2
 
 
 class CurriculumDraftService:
@@ -36,78 +39,88 @@ class CurriculumDraftService:
         self._llm_client = llm_client
         self._settings = settings
 
-    def generate(self, actor: User, files: list[UploadFile]) -> CurriculumDraftResponse:
+    def generate(
+        self,
+        actor: User,
+        files: list[UploadFile],
+        topic: str | None = None,
+    ) -> CurriculumDraftResponse:
+        topic_text = (topic or "").strip()
+        source_mode = (
+            "topic"
+            if topic_text and not files
+            else "documents_with_topic"
+            if topic_text
+            else "documents"
+        )
         logger.info(
             "Curriculum draft generation started",
-            extra={"actor_id": str(actor.id), "file_count": len(files)},
+            extra={
+                "actor_id": str(actor.id),
+                "file_count": len(files),
+                "has_topic": bool(topic_text),
+                "source_mode": source_mode,
+            },
         )
-        if not 1 <= len(files) <= _MAX_FILES:
+        if len(files) > _MAX_FILES:
             raise BadRequestError(
-                f"Upload between 1 and {_MAX_FILES} files per request",
+                f"Upload no more than {_MAX_FILES} files per request",
                 "too_many_files",
             )
+        if not files and not topic_text:
+            raise BadRequestError(
+                "Provide a curriculum topic or upload at least one document",
+                "missing_draft_source",
+            )
+        if topic_text:
+            if len(topic_text) < _MIN_TOPIC_CHARS:
+                raise BadRequestError(
+                    f"Curriculum topic must contain at least {_MIN_TOPIC_CHARS} characters",
+                    "invalid_topic",
+                )
+            if len(topic_text) > _MAX_TOPIC_CHARS:
+                raise BadRequestError(
+                    f"Curriculum topic must be at most {_MAX_TOPIC_CHARS} characters",
+                    "invalid_topic",
+                )
 
         sources = [self._read_source(uploaded_file) for uploaded_file in files]
-        if not any(text.strip() for _, text in sources):
+        if sources and not any(text.strip() for _, text in sources):
             raise BadRequestError(
                 "No extractable text found in the uploaded files "
                 "(scanned documents without OCR are not supported)",
                 "no_extractable_text",
             )
 
-        combined = "\n\n".join(
-            f"= File: {name} =\n{text}" for name, text in sources
-        )[:DOCUMENT_TEXT_MAX_CHARS]
+        if files:
+            sections = []
+            if topic_text:
+                sections.append(f"= Curriculum brief =\n{topic_text}")
+            sections.extend(f"= File: {name} =\n{text}" for name, text in sources)
+            document_text: str | None = "\n\n".join(sections)[:DOCUMENT_TEXT_MAX_CHARS]
+        else:
+            document_text = None
+
         logger.info(
-            "Curriculum source text extracted",
+            "Curriculum draft source prepared",
             extra={
                 "actor_id": str(actor.id),
                 "file_count": len(sources),
-                "text_chars": len(combined),
+                "source_mode": source_mode,
+                "text_chars": len(document_text or topic_text),
             },
         )
-        try:
-            payload = self._llm_client.draft_curriculum(combined)
-        except LLMNotConfiguredError:
-            logger.warning(
-                "Curriculum draft generation unavailable: LLM is not configured",
-                extra={"actor_id": str(actor.id), "operation": "draft"},
-            )
-            raise
-        except LLMResponseError as exc:
-            logger.error(
-                "Curriculum draft provider request failed",
-                extra={
-                    "actor_id": str(actor.id),
-                    "operation": "draft",
-                    "model": self._llm_client.model,
-                    "exception_type": type(exc).__name__,
-                },
-            )
-            raise ServiceUnavailableError(
-                f"LLM drafting failed: {exc}", "llm_draft_failed"
-            ) from exc
-        try:
-            draft = CurriculumDraftResponse.from_llm_payload(payload)
-        except BadRequestError as exc:
-            logger.error(
-                "Curriculum draft response failed validation",
-                extra={
-                    "actor_id": str(actor.id),
-                    "operation": "draft",
-                    "model": self._llm_client.model,
-                    "exception_type": type(exc).__name__,
-                },
-            )
-            raise ServiceUnavailableError(
-                f"LLM returned an incomplete or invalid curriculum draft: {exc.message}",
-                "llm_draft_failed",
-            ) from exc
+        draft = self._generate_validated_draft(
+            actor,
+            document_text=document_text,
+            topic=topic_text or None,
+        )
         logger.info(
             "Curriculum draft generation completed",
             extra={
                 "actor_id": str(actor.id),
                 "operation": "draft",
+                "source_mode": source_mode,
                 "model": self._llm_client.model,
                 "semester_count": len(draft.semesters),
                 "course_count": sum(len(semester.courses) for semester in draft.semesters),
@@ -117,6 +130,119 @@ class CurriculumDraftService:
             },
         )
         return draft
+
+    def _generate_validated_draft(
+        self,
+        actor: User,
+        *,
+        document_text: str | None,
+        topic: str | None,
+    ) -> CurriculumDraftResponse:
+        try:
+            payload = (
+                self._llm_client.draft_curriculum(document_text)
+                if document_text is not None
+                else self._llm_client.draft_curriculum_from_topic(topic or "")
+            )
+        except LLMNotConfiguredError:
+            logger.warning(
+                "Curriculum draft generation unavailable: LLM is not configured",
+                extra={"actor_id": str(actor.id), "operation": "draft"},
+            )
+            raise
+        except LLMResponseError as exc:
+            self._log_provider_failure(actor, exc, attempt=1)
+            raise ServiceUnavailableError(
+                f"LLM drafting failed: {exc}", "llm_draft_failed"
+            ) from exc
+
+        try:
+            return CurriculumDraftResponse.from_llm_payload(payload)
+        except BadRequestError as exc:
+            logger.warning(
+                "Curriculum draft response failed validation; requesting repair",
+                extra={
+                    "actor_id": str(actor.id),
+                    "operation": "draft",
+                    "model": self._llm_client.model,
+                    "exception_type": type(exc).__name__,
+                    "validation_error": exc.message,
+                    "attempt": 1,
+                    "max_attempts": _MAX_DRAFT_ATTEMPTS,
+                },
+            )
+            first_error = exc
+
+        try:
+            repaired_payload = (
+                self._llm_client.repair_curriculum_draft(
+                    document_text, payload, first_error.message
+                )
+                if document_text is not None
+                else self._llm_client.repair_curriculum_draft_from_topic(
+                    topic or "", payload, first_error.message
+                )
+            )
+        except LLMNotConfiguredError:
+            logger.warning(
+                "Curriculum draft repair unavailable: LLM is not configured",
+                extra={"actor_id": str(actor.id), "operation": "draft"},
+            )
+            raise
+        except LLMResponseError as exc:
+            self._log_provider_failure(actor, exc, attempt=2)
+            raise ServiceUnavailableError(
+                "LLM returned an incomplete or invalid curriculum draft and the repair "
+                f"attempt failed: {exc}",
+                "llm_draft_failed",
+            ) from exc
+
+        try:
+            draft = CurriculumDraftResponse.from_llm_payload(repaired_payload)
+        except BadRequestError as exc:
+            logger.error(
+                "Curriculum draft repair failed validation",
+                extra={
+                    "actor_id": str(actor.id),
+                    "operation": "draft",
+                    "model": self._llm_client.model,
+                    "exception_type": type(exc).__name__,
+                    "validation_error": exc.message,
+                    "attempt": _MAX_DRAFT_ATTEMPTS,
+                    "max_attempts": _MAX_DRAFT_ATTEMPTS,
+                },
+            )
+            raise ServiceUnavailableError(
+                "LLM returned an incomplete or invalid curriculum draft after one repair "
+                f"attempt: {exc.message}",
+                "llm_draft_failed",
+            ) from exc
+
+        logger.info(
+            "Curriculum draft repaired after validation feedback",
+            extra={
+                "actor_id": str(actor.id),
+                "operation": "draft",
+                "model": self._llm_client.model,
+                "attempt": _MAX_DRAFT_ATTEMPTS,
+            },
+        )
+        return draft
+
+    def _log_provider_failure(
+        self, actor: User, exc: LLMResponseError, attempt: int
+    ) -> None:
+        logger.error(
+            "Curriculum draft provider request failed",
+            extra={
+                "actor_id": str(actor.id),
+                "operation": "draft",
+                "model": self._llm_client.model,
+                "exception_type": type(exc).__name__,
+                "attempt": attempt,
+                "max_attempts": _MAX_DRAFT_ATTEMPTS,
+            },
+        )
 
     def _read_source(self, uploaded_file: UploadFile) -> tuple[str, str]:
         extension = normalize_extension(uploaded_file.filename)

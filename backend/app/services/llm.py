@@ -1,5 +1,6 @@
 import json
 import logging
+import random
 import time
 from typing import Any, Protocol
 
@@ -11,16 +12,29 @@ from app.core.logging_config import safe_exception_details
 
 DOCUMENT_TEXT_MAX_CHARS = 120_000
 _DEFAULT_DRAFT_MAX_OUTPUT_TOKENS = 16_384
-_GEMINI_2_5_MAX_OUTPUT_TOKENS = 32_768
-_RETRYABLE_PROVIDER_STATUSES = {408, 429, 500, 502, 503, 504}
-_MAX_PROVIDER_ATTEMPTS = 3
+_GEMINI_MAX_OUTPUT_TOKENS = 32_768
+_RETRYABLE_PROVIDER_STATUSES = {408, 429, 500, 502, 503, 504, 529}
+_MAX_PROVIDER_ATTEMPTS = 5
+_MAX_RETRY_DELAY_SECONDS = 10.0
 logger = logging.getLogger(__name__)
 
 
 def _draft_max_output_tokens(model: str) -> int:
-    if model.lower().startswith("gemini-2.5-"):
-        return _GEMINI_2_5_MAX_OUTPUT_TOKENS
+    if model.lower().startswith("gemini-"):
+        return _GEMINI_MAX_OUTPUT_TOKENS
     return _DEFAULT_DRAFT_MAX_OUTPUT_TOKENS
+
+
+def _retry_delay_seconds(response: httpx.Response, attempt: int) -> float:
+    retry_after = response.headers.get("retry-after")
+    if retry_after is not None:
+        try:
+            return max(0.0, min(float(retry_after), _MAX_RETRY_DELAY_SECONDS))
+        except ValueError:
+            pass
+    base_delay = min(float(2**attempt), _MAX_RETRY_DELAY_SECONDS)
+    return base_delay + random.uniform(0.0, 0.5)
+
 
 _SYSTEM_PROMPT = (
     "You are a curriculum analysis assistant for an academic institution. "
@@ -43,11 +57,7 @@ _SYSTEM_PROMPT = (
     "produce empty lists where the category is absent; do not invent data."
 )
 
-_DRAFT_SYSTEM_PROMPT = (
-    "You are a curriculum drafting assistant for an academic institution. "
-    "You receive the combined text of one or more uploaded curriculum documents "
-    "(syllabi, curriculum outlines, regulations). "
-    "Produce a roadmap-style curriculum draft based on them. "
+_DRAFT_OUTPUT_SCHEMA = (
     "Respond with a single JSON object and nothing else. Use EXACTLY these keys:\n"
     "{\n"
     '  "program": {"name": string|null, "degree": string|null, '
@@ -61,10 +71,10 @@ _DRAFT_SYSTEM_PROMPT = (
     '  "mappings": [{"course_code": string, "course_outcome_code": string, '
     '"program_outcome_code": string, "level": int}]\n'
     "}\n"
+)
+
+_DRAFT_RULES = (
     "Rules:\n"
-    "- Derive the draft from the provided document text when it is present.\n"
-    "- When the documents are sparse, produce a sensible baseline draft for a "
-    "typical undergraduate program instead of an empty answer.\n"
     "- Use sequential semester numbers starting at 1 with no gaps.\n"
     "- Course codes are uppercase alphanumeric identifiers, unique across all "
     "semesters.\n"
@@ -76,10 +86,48 @@ _DRAFT_SYSTEM_PROMPT = (
     "course_outcome_code belong to the same course, program_outcome_code comes "
     "from the pos list, and level is 1, 2 or 3. Map every course outcome to "
     "at least one relevant PO, with 1-2 mappings per course outcome.\n"
-    "- If the documents do not define POs or PEOs, propose suitable draft "
-    "outcomes for the named program; do not leave either list empty. These are "
-    "AI suggestions, not claims that the source documents stated them.\n"
+    "- Propose suitable draft POs and PEOs when they are not defined; do not "
+    "leave either list empty. These are AI suggestions, not claims that a "
+    "source document stated them.\n"
     "- Keep summaries short (at most 2 sentences).\n"
+    "- Before responding, verify that every course outcome for every course "
+    "appears in at least one mapping entry.\n"
+)
+
+_DRAFT_SYSTEM_PROMPT = (
+    "You are a curriculum drafting assistant for an academic institution. "
+    "You receive the combined text of one or more uploaded curriculum documents "
+    "(syllabi, curriculum outlines, regulations). "
+    "Produce a roadmap-style curriculum draft based on them. "
+    + _DRAFT_OUTPUT_SCHEMA
+    + "Rules:\n"
+    "- Derive the draft from the provided document text when it is present.\n"
+    "- A section named '= Curriculum brief =' is the user's requested topic and "
+    "focus; it takes priority over document details when they conflict.\n"
+    "- When the documents are sparse, produce a sensible baseline draft for a "
+    "typical undergraduate program instead of an empty answer.\n"
+    + _DRAFT_RULES.removeprefix("Rules:\n")
+)
+
+_TOPIC_DRAFT_SYSTEM_PROMPT = (
+    "You are a curriculum design assistant for an academic institution. "
+    "You receive a short topic or program brief from an academic user instead "
+    "of source documents. Design a complete, realistic roadmap-style curriculum "
+    "draft for that brief. "
+    + _DRAFT_OUTPUT_SCHEMA
+    + "Rules:\n"
+    "- Treat the brief as the authority for the program focus, degree level, "
+    "duration, and any stated constraints. Infer missing details sensibly.\n"
+    "- Build the number of semesters implied by the duration (two semesters per "
+    "academic year) unless the brief states otherwise, with 2-12 semesters.\n"
+    "- Sequence courses from foundations to advanced material. Include core "
+    "courses, labs or applied projects, and relevant electives or capstone work "
+    "where they make the program coherent.\n"
+    "- Use the topic to choose course titles and content; keep the program "
+    "realistic for an accredited higher-education curriculum.\n"
+    "- Put every generative design choice into the draft rather than asking the "
+    "user follow-up questions.\n"
+    + _DRAFT_RULES
 )
 
 
@@ -104,6 +152,22 @@ class LLMClient(Protocol):
     ) -> dict[str, Any]: ...
 
     def draft_curriculum(self, document_text: str) -> dict[str, Any]: ...
+
+    def draft_curriculum_from_topic(self, topic: str) -> dict[str, Any]: ...
+
+    def repair_curriculum_draft(
+        self,
+        document_text: str,
+        previous_payload: dict[str, Any],
+        validation_feedback: str,
+    ) -> dict[str, Any]: ...
+
+    def repair_curriculum_draft_from_topic(
+        self,
+        topic: str,
+        previous_payload: dict[str, Any],
+        validation_feedback: str,
+    ) -> dict[str, Any]: ...
 
 
 class OpenAICompatibleLLMClient:
@@ -155,18 +219,82 @@ class OpenAICompatibleLLMClient:
         return _parse_json_object(content)
 
     def draft_curriculum(self, document_text: str) -> dict[str, Any]:
+        return self._request_draft(document_text)
+
+    def draft_curriculum_from_topic(self, topic: str) -> dict[str, Any]:
+        return self._request_draft(
+            topic,
+            system_prompt=_TOPIC_DRAFT_SYSTEM_PROMPT,
+            source_label="Curriculum topic and requirements",
+        )
+
+    def repair_curriculum_draft(
+        self,
+        document_text: str,
+        previous_payload: dict[str, Any],
+        validation_feedback: str,
+    ) -> dict[str, Any]:
+        return self._request_draft(
+            document_text,
+            previous_payload=previous_payload,
+            validation_feedback=validation_feedback,
+        )
+
+    def repair_curriculum_draft_from_topic(
+        self,
+        topic: str,
+        previous_payload: dict[str, Any],
+        validation_feedback: str,
+    ) -> dict[str, Any]:
+        return self._request_draft(
+            topic,
+            previous_payload=previous_payload,
+            validation_feedback=validation_feedback,
+            system_prompt=_TOPIC_DRAFT_SYSTEM_PROMPT,
+            source_label="Curriculum topic and requirements",
+        )
+
+    def _request_draft(
+        self,
+        source_text: str,
+        previous_payload: dict[str, Any] | None = None,
+        validation_feedback: str | None = None,
+        *,
+        system_prompt: str = _DRAFT_SYSTEM_PROMPT,
+        source_label: str = "Document content",
+    ) -> dict[str, Any]:
         if self._api_key is None or self._api_key.get_secret_value() == "":
             raise LLMNotConfiguredError()
 
-        truncated = document_text[:DOCUMENT_TEXT_MAX_CHARS]
+        truncated = source_text[:DOCUMENT_TEXT_MAX_CHARS]
+        messages: list[dict[str, str]] = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"{source_label}:\n{truncated}"},
+        ]
+        if previous_payload is not None and validation_feedback is not None:
+            messages.extend(
+                [
+                    {
+                        "role": "assistant",
+                        "content": json.dumps(previous_payload, ensure_ascii=False),
+                    },
+                    {
+                        "role": "user",
+                        "content": (
+                            "The draft validator rejected that response with this error:\n"
+                            f"{validation_feedback}\n\n"
+                            "Return the complete corrected JSON object, preserving the valid "
+                            "content. Check that every course outcome appears in at least one "
+                            "mapping before answering."
+                        ),
+                    },
+                ]
+            )
         payload = {
             "model": self._model,
             "temperature": 0,
             "max_tokens": _draft_max_output_tokens(self._model),
-            "messages": [
-                {"role": "system", "content": _DRAFT_SYSTEM_PROMPT},
-                {"role": "user", "content": f"Document content:\n{truncated}"},
-            ],
+            "messages": messages,
         }
         try:
             content = self._request(payload, operation="draft")
@@ -214,6 +342,7 @@ class OpenAICompatibleLLMClient:
                 response.status_code in _RETRYABLE_PROVIDER_STATUSES
                 and attempt < _MAX_PROVIDER_ATTEMPTS - 1
             ):
+                delay = _retry_delay_seconds(response, attempt)
                 logger.warning(
                     "Retrying transient LLM provider response",
                     extra={
@@ -222,14 +351,10 @@ class OpenAICompatibleLLMClient:
                         "provider_status": response.status_code,
                         "attempt": attempt + 1,
                         "max_attempts": _MAX_PROVIDER_ATTEMPTS,
+                        "retry_delay_seconds": round(delay, 2),
                     },
                 )
-                retry_after = response.headers.get("retry-after")
-                try:
-                    delay = float(retry_after) if retry_after is not None else 2**attempt
-                except ValueError:
-                    delay = 2**attempt
-                time.sleep(max(0, min(delay, 5)))
+                time.sleep(delay)
                 continue
             if response.status_code >= 400:
                 logger.error(
@@ -241,7 +366,9 @@ class OpenAICompatibleLLMClient:
                         "attempt": attempt + 1,
                     },
                 )
-                detail = _provider_error_detail(response)
+                detail = _provider_error_detail(response) or _provider_status_fallback(
+                    response.status_code
+                )
                 suffix = f": {detail}" if detail else ""
                 raise LLMResponseError(
                     f"LLM provider returned status {response.status_code}{suffix}"
@@ -288,9 +415,25 @@ def _provider_error_detail(response: httpx.Response) -> str:
         body = response.json()
     except ValueError:
         return ""
-    error = body.get("error") if isinstance(body, dict) else None
+    if not isinstance(body, dict):
+        return ""
+    error = body.get("error")
+    if isinstance(error, str):
+        return error.strip()[:300]
     message = error.get("message") if isinstance(error, dict) else None
+    if not isinstance(message, str):
+        message = body.get("message")
     return message.strip()[:300] if isinstance(message, str) else ""
+
+
+def _provider_status_fallback(status_code: int) -> str:
+    if status_code == 429:
+        return "provider rate limit reached; try again later"
+    if status_code == 503:
+        return "provider is temporarily unavailable or overloaded; try again in a moment"
+    if status_code == 529:
+        return "provider is temporarily overloaded; try again in a moment"
+    return ""
 
 
 def _parse_json_object(content: str) -> dict[str, Any]:

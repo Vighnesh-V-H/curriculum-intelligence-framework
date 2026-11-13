@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 
 from app.api.deps import (
     get_curriculum_draft_persistence_service,
@@ -21,9 +21,10 @@ router = APIRouter(tags=["curriculum-drafts"])
 def generate_curriculum_draft(
     actor: User = Depends(require_roles(*CURRICULUM_WRITE_ROLES)),
     files: list[UploadFile] = File(default=[]),
+    topic: str | None = Form(default=None),
     service: CurriculumDraftService = Depends(get_curriculum_draft_service),
 ) -> CurriculumDraftResponse:
-    return service.generate(actor, files)
+    return service.generate(actor, files, topic)
 
 
 @router.post(

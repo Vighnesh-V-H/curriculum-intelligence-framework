@@ -63,8 +63,66 @@ def test_draft_request_sets_a_large_output_budget_and_returns_json():
     assert "Map every course outcome" in request_body["messages"][0]["content"]
 
 
+def test_topic_draft_request_uses_topic_prompt_and_brief():
+    expected = {"program": {"name": "Example"}}
+    llm, http_client, requests = _client(expected)
+    try:
+        result = llm.draft_curriculum_from_topic(
+            "B.Tech in Artificial Intelligence, four years"
+        )
+    finally:
+        http_client.close()
+
+    assert result == expected
+    body = json.loads(requests[0].content)
+    system_prompt = body["messages"][0]["content"]
+    assert "short topic or program brief" in system_prompt
+    assert "Build the number of semesters" in system_prompt
+    assert body["messages"][1]["content"] == (
+        "Curriculum topic and requirements:\n"
+        "B.Tech in Artificial Intelligence, four years"
+    )
+
+
+def test_repair_request_includes_previous_draft_and_validator_error():
+    llm, http_client, requests = _client({"corrected": True})
+    previous = {"mappings": []}
+    try:
+        result = llm.repair_curriculum_draft(
+            "course outline",
+            previous,
+            "Course outcome 'CO2' for course 'MA101' has no program outcome mapping",
+        )
+    finally:
+        http_client.close()
+
+    assert result == {"corrected": True}
+    assert len(requests) == 1
+    messages = json.loads(requests[0].content)["messages"]
+    assert messages[0]["role"] == "system"
+    assert messages[1]["content"] == "Document content:\ncourse outline"
+    assert messages[2] == {
+        "role": "assistant",
+        "content": json.dumps(previous),
+    }
+    assert messages[3]["role"] == "user"
+    assert "CO2" in messages[3]["content"]
+    assert "has no program outcome mapping" in messages[3]["content"]
+
+
 def test_gemini_25_uses_its_larger_output_budget():
     llm, http_client, requests = _client({}, model="gemini-2.5-flash")
+    try:
+        llm.draft_curriculum("course outline")
+    finally:
+        http_client.close()
+
+    request_body = json.loads(requests[0].content)
+    assert request_body["max_tokens"] == 32_768
+
+
+def test_gemini_3_uses_its_larger_output_budget():
+    llm, http_client, requests = _client({}, model="gemini-3.5-flash")
     try:
         llm.draft_curriculum("course outline")
     finally:
@@ -111,6 +169,30 @@ def test_transient_provider_error_is_retried():
     finally:
         http_client.close()
     assert requests == 2
+
+
+def test_overloaded_provider_without_detail_has_actionable_message():
+    attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        return httpx.Response(503, headers={"Retry-After": "0"}, text="")
+
+    http_client = httpx.Client(transport=httpx.MockTransport(handler))
+    llm = OpenAICompatibleLLMClient(
+        base_url="https://llm.example/v1",
+        api_key=SecretStr("test-key"),
+        model="test-model",
+        timeout_seconds=5,
+        http_client=http_client,
+    )
+    try:
+        with pytest.raises(LLMResponseError, match="temporarily unavailable"):
+            llm.draft_curriculum("course outline")
+    finally:
+        http_client.close()
+    assert attempts == 5
 
 
 def test_truncated_llm_response_is_reported_clearly():

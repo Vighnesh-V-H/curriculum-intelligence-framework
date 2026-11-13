@@ -178,7 +178,7 @@ class CurriculumDraftSaveRequest(BaseModel):
 
 def _draft_validation_message(exc: ValidationError) -> str:
     error = exc.errors()[0]
-    location = ".".join(str(part) for part in error.get("loc", ()))
+    location = ".".join(str(part) for part in error.get("loc", ())) or "payload"
     detail = str(error.get("msg", "invalid draft payload"))
     return (f"LLM draft payload is invalid: {detail} (at '{location}')")[
         :_INVALID_DRAFT_MESSAGE_MAX_CHARS
