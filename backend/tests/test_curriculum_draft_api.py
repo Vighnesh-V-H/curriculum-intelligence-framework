@@ -549,7 +549,7 @@ def test_save_reviewed_draft_persists_normalized_curriculum(client, faculty_toke
     body = response.json()
     assert body["description"] == make_draft_payload()["program"]["summary"]
     version = body["versions"][0]
-    assert version["status"] == "DRAFT"
+    assert version["status"] == "APPROVED"
     assert len(version["semesters"]) == 2
     assert version["semesters"][0]["focus"] == "Foundations"
     assert len(version["courses"]) == 4
@@ -567,7 +567,7 @@ def test_save_reviewed_draft_persists_normalized_curriculum(client, faculty_toke
     assert len(outcomes.json()) >= 1
     assert mappings.status_code == 200
     assert len(mappings.json()) == 6
-    assert all(row["current_version"]["status"] == "DRAFT" for row in mappings.json())
+    assert all(row["current_version"]["status"] == "APPROVED" for row in mappings.json())
 
     pos = client.get(
         f"/api/v1/programs/{program['id']}/program-outcomes", headers=bearer(faculty_token)
@@ -575,15 +575,15 @@ def test_save_reviewed_draft_persists_normalized_curriculum(client, faculty_toke
     peos = client.get(f"/api/v1/programs/{program['id']}/peos", headers=bearer(faculty_token))
     assert len(pos.json()) == 5
     assert len(peos.json()) == 3
-    assert all(row["current_version"]["status"] == "DRAFT" for row in pos.json())
-    assert all(row["current_version"]["status"] == "DRAFT" for row in peos.json())
+    assert all(row["current_version"]["status"] == "APPROVED" for row in pos.json())
+    assert all(row["current_version"]["status"] == "APPROVED" for row in peos.json())
 
     listing = client.get("/api/v1/curricula", headers=bearer(faculty_token))
     assert listing.status_code == 200
     listed = next(row for row in listing.json() if row["id"] == body["id"])
     assert listed["academic_year"] == "2026-27"
     assert listed["regulation"] == "AI-2026"
-    assert listed["latest_version"]["status"] == "DRAFT"
+    assert listed["latest_version"]["status"] == "APPROVED"
     assert listed["latest_version"]["version_label"] == "1.0"
 
 

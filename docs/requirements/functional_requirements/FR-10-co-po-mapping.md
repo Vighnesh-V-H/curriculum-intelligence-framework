@@ -1,5 +1,11 @@
 # FR-10: CO-PO Mapping
 
+> **Current workflow override:** Authorized curriculum writers create, edit,
+> and remove CO–PO mappings directly. New mappings and mapping-level changes
+> take effect immediately; approval and user-visible mapping versions are not
+> part of the current workflow. Older approval/version clauses below are
+> retired for the current product behavior.
+
 ## Description
 
 The CO-PO Mapping module shall allow authorized users to create,

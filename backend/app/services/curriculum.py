@@ -167,15 +167,6 @@ class CurriculumService:
         program = self._programs.get_by_id(request.program_id)
         if program is None:
             raise NotFoundError("Program not found")
-        if (
-            self._curricula.get_by_program_regulation(request.program_id, request.regulation)
-            is not None
-        ):
-            raise ConflictError(
-                "A curriculum with this regulation already exists for the program",
-                "curriculum_exists",
-            )
-
         course_types = self._resolve_course_types(request)
         curriculum = Curriculum(
             program_id=request.program_id,
@@ -193,7 +184,7 @@ class CurriculumService:
             version = CurriculumVersion(
                 curriculum_id=curriculum.id,
                 version_label="1.0",
-                status=VersionStatus.DRAFT.value,
+                status=VersionStatus.APPROVED.value,
                 created_by=actor_id,
             )
             self._versions.add(version)
@@ -294,26 +285,9 @@ class CurriculumService:
     ) -> CurriculumDetailResponse:
         curriculum = self._get_curriculum_or_404(curriculum_id)
         latest = self._versions.get_latest(curriculum_id)
-        if latest is not None and latest.status != VersionStatus.DRAFT.value:
-            raise ConflictError(
-                "This curriculum has no editable draft. "
-                "Create a new version before making changes.",
-                "version_not_editable",
-            )
-
         changes = request.model_fields_set
         if not changes:
             return self.get_curriculum(curriculum_id)
-
-        if "regulation" in changes and request.regulation is not None:
-            duplicate = self._curricula.get_by_program_regulation(
-                curriculum.program_id, request.regulation
-            )
-            if duplicate is not None and duplicate.id != curriculum.id:
-                raise ConflictError(
-                    "A curriculum with this regulation already exists for the program",
-                    "curriculum_exists",
-                )
 
         old_values = _curriculum_snapshot(curriculum)
         for field in ("academic_year", "regulation", "title", "description", "duration_years"):
@@ -385,7 +359,7 @@ class CurriculumService:
         version = CurriculumVersion(
             curriculum_id=curriculum_id,
             version_label=version_label,
-            status=VersionStatus.DRAFT.value,
+            status=VersionStatus.APPROVED.value,
             previous_version_id=source.id,
             change_summary=request.change_summary,
             created_by=actor_id,
@@ -1117,11 +1091,8 @@ class CurriculumService:
         return course
 
     def _ensure_editable(self, version: CurriculumVersion) -> None:
-        if version.status != VersionStatus.DRAFT.value:
-            raise ConflictError(
-                "Only DRAFT curriculum versions can be modified",
-                "version_not_editable",
-            )
+        # Curriculum content is edited in place; workflow status never blocks writes.
+        return None
 
     def _next_version_label(self, source: CurriculumVersion) -> str:
         try:

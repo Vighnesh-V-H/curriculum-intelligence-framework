@@ -4,9 +4,10 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import {
   BookOpenText,
-  FileStack,
+  Building2,
   Layers3,
   LogOut,
+  GraduationCap,
   SearchCheck,
   Sparkles,
   Users,
@@ -32,9 +33,10 @@ import { ThemeToggle } from "@/components/theme-toggle";
 export type WorkspaceSection =
   | "dashboard"
   | "documents"
-  | "drafts"
   | "verification"
   | "curricula"
+  | "programs"
+  | "departments"
   | "users";
 
 type NavItem = {
@@ -46,8 +48,9 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Overview", key: "dashboard", Icon: BookOpenText },
-  { href: "/documents", label: "Documents", key: "documents", Icon: FileStack },
   { href: "/curricula", label: "Curricula", key: "curricula", Icon: Layers3 },
+  { href: "/programs", label: "Programs", key: "programs", Icon: GraduationCap },
+  { href: "/departments", label: "Departments", key: "departments", Icon: Building2 },
   { href: "/verification", label: "Verification", key: "verification", Icon: SearchCheck },
 ];
 
@@ -58,19 +61,13 @@ const USERS_NAV_ITEM: NavItem = {
   Icon: Users,
 };
 
-const DRAFTS_NAV_ITEM: NavItem = {
-  href: "/curriculum-drafts/new",
-  label: "Draft studio",
-  key: "drafts",
-  Icon: Sparkles,
-};
-
 const SECTION_LABELS: Record<WorkspaceSection, string> = {
   dashboard: "Overview",
   documents: "Documents",
-  drafts: "Draft studio",
   verification: "Verification",
   curricula: "Curricula",
+  programs: "Programs",
+  departments: "Departments",
   users: "Users",
 };
 
@@ -91,10 +88,6 @@ export function WorkspaceNav({
   if (user.roles.includes("ADMIN")) {
     navItems.push(USERS_NAV_ITEM);
   }
-  if (onGenerate) {
-    navItems.push(DRAFTS_NAV_ITEM);
-  }
-
   return (
     <SidebarProvider className="workspace-provider">
       <Sidebar collapsible="icon" className="app-sidebar">
@@ -132,7 +125,6 @@ export function WorkspaceNav({
             </span>
             <span className="sidebar-user-copy">
               <b>{user.full_name}</b>
-              <small>{user.roles[0]?.replaceAll("_", " ").toLowerCase() ?? "Member"}</small>
             </span>
           </div>
           <SidebarMenu>
@@ -154,9 +146,9 @@ export function WorkspaceNav({
           <div className="topbar-actions">
             <ThemeToggle />
             {onGenerate ? (
-            <button className="topbar-generate" onClick={onGenerate} type="button" aria-label="Open curriculum draft studio">
+            <button className="topbar-generate" onClick={onGenerate} type="button" aria-label="Generate a curriculum">
               <Sparkles size={16} strokeWidth={1.9} />
-              <span className="text-primary-foreground/80">Open draft studio</span>
+              <span className="text-primary-foreground/80">Generate Curriculum</span>
             </button>
             ) : null}
           </div>

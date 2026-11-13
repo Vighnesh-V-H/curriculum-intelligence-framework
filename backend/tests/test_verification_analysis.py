@@ -81,13 +81,8 @@ def create_and_approve_prerequisite(
     )
     assert response.status_code == 201, response.json()
     created = response.json()
-    approved = client.patch(
-        f"{prerequisite_url(curriculum, version)}/{created['id']}/status",
-        json={"status": "APPROVED"},
-        headers=bearer(admin_token),
-    )
-    assert approved.status_code == 200, approved.json()
-    return approved.json()
+    assert created["status"] == "APPROVED"
+    return created
 
 
 def run_verification(client, token, curriculum, version) -> dict:

@@ -50,14 +50,57 @@ def test_program_requires_existing_department(client, admin_token):
     assert response.status_code == 404
 
 
-def test_faculty_cannot_create_academic_structure(client, faculty_token):
+def test_faculty_can_create_program(client, faculty_token, department):
+    response = client.post(
+        "/api/v1/programs",
+        json={
+            "department_id": department["id"],
+            "code": "BTECH-ECE",
+            "name": "B.Tech Electronics",
+            "degree_type": "B.Tech",
+            "duration_years": 4,
+        },
+        headers=bearer(faculty_token),
+    )
+
+    assert response.status_code == 201
+    assert response.json()["code"] == "BTECH-ECE"
+
+
+def test_reviewer_can_create_program(client, reviewer_token, department):
+    response = client.post(
+        "/api/v1/programs",
+        json={
+            "department_id": department["id"],
+            "code": "MSC-DS",
+            "name": "M.Sc. Data Science",
+            "duration_years": 2,
+        },
+        headers=bearer(reviewer_token),
+    )
+
+    assert response.status_code == 201
+
+
+def test_faculty_can_create_department(client, faculty_token):
     response = client.post(
         "/api/v1/departments",
         json={"code": "ECE", "name": "Electronics"},
         headers=bearer(faculty_token),
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 201
+    assert response.json()["code"] == "ECE"
+
+
+def test_reviewer_can_create_department(client, reviewer_token):
+    response = client.post(
+        "/api/v1/departments",
+        json={"code": "MAT", "name": "Mathematics"},
+        headers=bearer(reviewer_token),
+    )
+
+    assert response.status_code == 201
 
 
 def test_reviewer_can_read_academic_structure(client, reviewer_token, department, program):

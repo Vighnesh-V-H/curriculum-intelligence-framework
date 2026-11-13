@@ -202,7 +202,9 @@ class CurriculumDetailResponse(CurriculumResponse):
         base = CurriculumResponse.from_model(curriculum, latest)
         return cls(
             **base.model_dump(),
-            versions=[CurriculumVersionResponse.from_model(version) for version in versions],
+            versions=(
+                [CurriculumVersionResponse.from_model(latest)] if latest is not None else []
+            ),
         )
 
 

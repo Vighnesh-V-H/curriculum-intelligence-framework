@@ -1,41 +1,44 @@
 # Program Outcome and PEO Management API
 
 Covers FR-08 (Program Outcomes) and FR-09 (Program Educational
-Objectives). Both use the same lifecycle and differ only in identity
-and content tables.
+Objectives). Both use the same data structures. Current behavior is immediate
+create/edit with no approval gate; authorized faculty can write. The legacy
+version tables are retained only for relational compatibility. Version-history
+and version-status endpoints have been removed; the workspace uses current
+outcome content only.
 
 ## Authorization
 
 | Operation | Allowed roles |
 | --- | --- |
-| Read POs, PEOs, and their versions | Any authenticated user |
-| Create, update, deactivate, submit, approve, or reject | `ADMIN`, `COMMITTEE_MEMBER` |
+| Read POs and PEOs | Any authenticated user |
+| Create, update, or deactivate | `ADMIN`, `COMMITTEE_MEMBER`, `FACULTY` |
 
 ## Program Outcomes
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `POST` | `/api/v1/programs/{program_id}/program-outcomes` | Create a PO with initial draft version |
+| `POST` | `/api/v1/programs/{program_id}/program-outcomes` | Create an immediately effective PO |
 | `GET` | `/api/v1/programs/{program_id}/program-outcomes` | List POs for a program |
 | `GET` | `/api/v1/program-outcomes/{outcome_id}` | Get a PO with version history |
-| `PATCH` | `/api/v1/program-outcomes/{outcome_id}` | Update the PO identifier or draft description |
+| `PATCH` | `/api/v1/program-outcomes/{outcome_id}` | Update the PO identifier or description in place |
 | `PATCH` | `/api/v1/program-outcomes/{outcome_id}/status` | Activate or deactivate the PO |
-| `GET` | `/api/v1/program-outcomes/{outcome_id}/versions` | List PO versions |
-| `PATCH` | `/api/v1/program-outcomes/{outcome_id}/versions/{version_id}/status` | Submit, approve, reject, or reopen a version |
 
 ## Program Educational Objectives
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `POST` | `/api/v1/programs/{program_id}/peos` | Create a PEO with initial draft version |
+| `POST` | `/api/v1/programs/{program_id}/peos` | Create an immediately effective PEO |
 | `GET` | `/api/v1/programs/{program_id}/peos` | List PEOs for a program |
 | `GET` | `/api/v1/peos/{peo_id}` | Get a PEO with version history |
-| `PATCH` | `/api/v1/peos/{peo_id}` | Update the PEO identifier or draft description |
+| `PATCH` | `/api/v1/peos/{peo_id}` | Update the PEO identifier or description in place |
 | `PATCH` | `/api/v1/peos/{peo_id}/status` | Activate or deactivate the PEO |
-| `GET` | `/api/v1/peos/{peo_id}/versions` | List PEO versions |
-| `PATCH` | `/api/v1/peos/{peo_id}/versions/{version_id}/status` | Submit, approve, reject, or reopen a version |
 
-## Version Workflow
+## Retired Version Workflow
+
+The following lifecycle is legacy documentation only. Current product behavior
+creates and edits current PO/PEO content in place without these transitions.
+
 
 ```text
 DRAFT -> PROPOSED -> APPROVED

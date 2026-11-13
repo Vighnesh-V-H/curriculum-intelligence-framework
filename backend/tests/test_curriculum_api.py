@@ -31,7 +31,9 @@ def curriculum_payload(program_id: str, regulation: str = "2026"):
     }
 
 
-def test_faculty_can_create_curriculum_with_initial_draft_version(client, faculty_token, program):
+def test_faculty_can_create_curriculum_with_immediately_available_content(
+    client, faculty_token, program
+):
     response = client.post(
         "/api/v1/curricula",
         json=curriculum_payload(program["id"]),
@@ -44,12 +46,12 @@ def test_faculty_can_create_curriculum_with_initial_draft_version(client, facult
     assert body["program_code"] == "BTECH-CSE"
     assert body["regulation"] == "2026"
     assert body["latest_version"]["version_label"] == "1.0"
-    assert body["latest_version"]["status"] == "DRAFT"
+    assert body["latest_version"]["status"] == "APPROVED"
     assert len(body["versions"]) == 1
 
     version = body["versions"][0]
     assert version["version_label"] == "1.0"
-    assert version["status"] == "DRAFT"
+    assert version["status"] == "APPROVED"
     assert len(version["semesters"]) == 8
     assert {course["course_code"] for course in version["courses"]} == {
         "CS101",
@@ -58,15 +60,14 @@ def test_faculty_can_create_curriculum_with_initial_draft_version(client, facult
     assert all(course["status"] == "ACTIVE" for course in version["courses"])
 
 
-def test_duplicate_regulation_for_program_is_rejected(client, faculty_token, program):
+def test_multiple_curricula_with_same_regulation_are_allowed(client, faculty_token, program):
     payload = curriculum_payload(program["id"])
     first = client.post("/api/v1/curricula", json=payload, headers=bearer(faculty_token))
-    assert first.status_code == 201
-
     second = client.post("/api/v1/curricula", json=payload, headers=bearer(faculty_token))
 
-    assert second.status_code == 409
-    assert second.json()["error"]["code"] == "curriculum_exists"
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json()["id"] != second.json()["id"]
 
 
 def test_different_regulations_for_same_program_are_allowed(client, faculty_token, program):
@@ -216,7 +217,7 @@ def test_update_curriculum_metadata(client, faculty_token, program):
     assert fetched.json()["regulation"] == "2027"
 
 
-def test_update_curriculum_rejects_duplicate_regulation(client, faculty_token, program):
+def test_update_curriculum_allows_duplicate_regulation(client, faculty_token, program):
     first = client.post(
         "/api/v1/curricula",
         json=curriculum_payload(program["id"], "2026"),
@@ -234,32 +235,24 @@ def test_update_curriculum_rejects_duplicate_regulation(client, faculty_token, p
         headers=bearer(faculty_token),
     )
 
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == "curriculum_exists"
+    assert response.status_code == 200
+    assert response.json()["regulation"] == first["regulation"]
 
 
-def test_update_curriculum_requires_editable_draft(client, faculty_token, program):
+def test_update_curriculum_does_not_require_approval_workflow(client, faculty_token, program):
     created = client.post(
         "/api/v1/curricula",
         json=curriculum_payload(program["id"]),
         headers=bearer(faculty_token),
     ).json()
-    version = created["versions"][0]
-    review = client.patch(
-        f"/api/v1/curricula/{created['id']}/versions/{version['id']}/status",
-        json={"status": "UNDER_REVIEW"},
-        headers=bearer(faculty_token),
-    )
-    assert review.status_code == 200
-
     response = client.patch(
         f"/api/v1/curricula/{created['id']}",
         json={"title": "Should not apply"},
         headers=bearer(faculty_token),
     )
 
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == "version_not_editable"
+    assert response.status_code == 200
+    assert response.json()["title"] == "Should not apply"
 
 
 def test_update_and_remove_course_outcome(client, faculty_token, program):

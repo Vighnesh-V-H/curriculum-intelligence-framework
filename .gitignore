@@ -14,9 +14,10 @@ node_modules/
 # Runtime uploads (local storage)
 backend/local-storage/
 
-# Installed agent skills and their installer lockfile
+# Installed agent skills and Claude workspace data
 .agents/skills/
-.claude/skills/
+skills/
+.claude/
 skills-lock.json
 
 # Tooling

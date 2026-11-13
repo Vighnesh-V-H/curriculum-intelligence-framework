@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, status
 
-from app.api.deps import get_academic_service, get_current_user, require_roles
+from app.api.deps import get_academic_service, get_current_user
 from app.db.models.user import RoleCode, User
 from app.schemas.academic import (
     CourseTypeResponse,
@@ -27,7 +27,7 @@ CURRICULUM_WRITE_ROLES = (
 )
 def create_department(
     payload: DepartmentCreate,
-    actor: User = Depends(require_roles(RoleCode.ADMIN, RoleCode.COMMITTEE_MEMBER)),
+    current_user: User = Depends(get_current_user),
     service: AcademicService = Depends(get_academic_service),
 ) -> DepartmentResponse:
     return service.create_department(payload)
@@ -48,7 +48,7 @@ def list_departments(
 )
 def create_program(
     payload: ProgramCreate,
-    actor: User = Depends(require_roles(RoleCode.ADMIN, RoleCode.COMMITTEE_MEMBER)),
+    current_user: User = Depends(get_current_user),
     service: AcademicService = Depends(get_academic_service),
 ) -> ProgramResponse:
     return service.create_program(payload)

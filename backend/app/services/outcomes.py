@@ -96,7 +96,9 @@ class OutcomeService:
             version_number=1,
             description=request.description,
             effective_date=request.effective_date,
-            status=OutcomeVersionStatus.DRAFT.value,
+            status=OutcomeVersionStatus.APPROVED.value,
+            approved_by=actor_id,
+            approved_at=utc_now(),
             created_by=actor_id,
         )
         try:
@@ -263,7 +265,9 @@ class OutcomeService:
             version_number=1,
             description=request.description,
             effective_date=request.effective_date,
-            status=OutcomeVersionStatus.DRAFT.value,
+            status=OutcomeVersionStatus.APPROVED.value,
+            approved_by=actor_id,
+            approved_at=utc_now(),
             created_by=actor_id,
         )
         try:
@@ -422,21 +426,17 @@ class OutcomeService:
     ) -> None:
         ordered = sorted(versions, key=lambda item: item.version_number)
         latest = ordered[-1] if ordered else None
-        if latest is not None and latest.status == OutcomeVersionStatus.PROPOSED.value:
-            raise ConflictError(
-                "The latest version is under review and cannot be modified",
-                "outcome_version_under_review",
-            )
-        if latest is not None and latest.status in (
-            OutcomeVersionStatus.DRAFT.value,
-            OutcomeVersionStatus.REJECTED.value,
-        ):
+        if description_provided and description is None:
+            raise BadRequestError("Outcome description cannot be empty")
+        if latest is not None:
             old_values = _version_snapshot(latest)
-            if description_provided and description is not None:
-                latest.description = description
+            if description_provided:
+                latest.description = description or latest.description
             if effective_date is not None:
                 latest.effective_date = effective_date
-            latest.status = OutcomeVersionStatus.DRAFT.value
+            latest.status = OutcomeVersionStatus.APPROVED.value
+            latest.approved_by = actor_id
+            latest.approved_at = utc_now()
             latest.review_comments = None
             self._audit(
                 actor_id,
@@ -449,17 +449,16 @@ class OutcomeService:
             return
 
         if not description_provided or description is None:
-            raise BadRequestError(
-                "A new version requires a description",
-                "description_required",
-            )
+            raise BadRequestError("Outcome description is required", "description_required")
         version = version_model(
             **{
                 parent_field: parent,
-                "version_number": version_repository.next_version_number(parent.id),
+                "version_number": 1,
                 "description": description,
                 "effective_date": effective_date,
-                "status": OutcomeVersionStatus.DRAFT.value,
+                "status": OutcomeVersionStatus.APPROVED.value,
+                "approved_by": actor_id,
+                "approved_at": utc_now(),
                 "created_by": actor_id,
             }
         )

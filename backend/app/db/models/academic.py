@@ -109,9 +109,6 @@ class Program(Base):
 
 class Curriculum(Base):
     __tablename__ = "curricula"
-    __table_args__ = (
-        UniqueConstraint("program_id", "regulation", name="uq_curricula_program_regulation"),
-    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     program_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("programs.id"), nullable=False)

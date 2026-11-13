@@ -31,7 +31,7 @@ def test_remove_prerequisite(client, faculty_token, admin_token, program):
     )
     assert created.status_code == 201
     prerequisite = created.json()
-    assert prerequisite["status"] == "PROPOSED"
+    assert prerequisite["status"] == "APPROVED"
 
     removed = client.delete(
         f"{base_url}/{prerequisite['id']}", headers=bearer(faculty_token)

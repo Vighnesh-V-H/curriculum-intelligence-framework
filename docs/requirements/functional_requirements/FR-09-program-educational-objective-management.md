@@ -1,5 +1,10 @@
 # FR-09: Program Educational Objective Management
 
+> **Current workflow override:** PEOs are created and edited immediately by
+> authorized administrators, committee members, and faculty. No draft/proposed/
+> approval gate or user-visible PEO version history is required. Older approval
+> and versioning clauses below are retired for the current product behavior.
+
 ## Description
 
 The Program Educational Objective Management module shall allow

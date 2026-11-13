@@ -1,5 +1,10 @@
 # FR-08: Program Outcome Management
 
+> **Current workflow override:** POs are created and edited immediately by
+> authorized administrators, committee members, and faculty. No draft/proposed/
+> approval gate or user-visible PO version history is required. Older approval
+> and versioning clauses below are retired for the current product behavior.
+
 ## Description
 
 The Program Outcome Management module shall allow authorized users

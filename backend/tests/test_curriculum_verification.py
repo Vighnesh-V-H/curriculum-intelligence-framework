@@ -89,7 +89,7 @@ def test_verification_reports_structure_outcomes_and_credit_summary(
     assert {group["key"] for group in report_body["groups"]} == {"INFO", "MEDIUM"}
 
 
-def test_draft_mapping_does_not_count_as_approved_coverage(
+def test_mapping_counts_as_coverage_without_approval(
     client, admin_token, reviewer_token, program
 ):
     curriculum, version = make_curriculum(client, admin_token, program)
@@ -107,16 +107,6 @@ def test_draft_mapping_does_not_count_as_approved_coverage(
     )
     assert co_response.status_code == 201
     assert po_response.status_code == 201
-    po_id = po_response.json()["id"]
-    po_version_id = po_response.json()["current_version"]["id"]
-    for outcome_status in ("PROPOSED", "APPROVED"):
-        status_response = client.patch(
-            f"/api/v1/program-outcomes/{po_id}/versions/{po_version_id}/status",
-            json={"status": outcome_status},
-            headers=bearer(admin_token),
-        )
-        assert status_response.status_code == 200
-
     with SessionLocal() as session:
         session.add(
             MappingLevel(
@@ -141,23 +131,7 @@ def test_draft_mapping_does_not_count_as_approved_coverage(
     )
     assert mapping_response.status_code == 201, mapping_response.json()
     mapping = mapping_response.json()
-    draft_run = run_verification(client, reviewer_token, curriculum, version)
-    draft_findings = client.get(
-        f"/api/v1/verification-runs/{draft_run.json()['id']}/findings",
-        headers=bearer(reviewer_token),
-    )
-    draft_titles = {finding["title"] for finding in draft_findings.json()}
-    assert "Course outcome has no approved program-outcome mapping" in draft_titles
-    assert "Program outcome has no approved course-outcome coverage" in draft_titles
-
-    mapping_version_id = mapping["current_version"]["id"]
-    for mapping_status in ("PROPOSED", "APPROVED"):
-        status_response = client.patch(
-            f"/api/v1/mappings/{mapping['id']}/versions/{mapping_version_id}/status",
-            json={"status": mapping_status},
-            headers=bearer(admin_token),
-        )
-        assert status_response.status_code == 200
+    assert mapping["current_version"]["status"] == "APPROVED"
 
     approved_run = run_verification(client, reviewer_token, curriculum, version)
     approved_findings = client.get(

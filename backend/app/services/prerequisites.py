@@ -12,7 +12,6 @@ from app.db.models.academic import (
     Curriculum,
     CurriculumVersion,
     PrerequisiteStatus,
-    VersionStatus,
 )
 from app.db.models.audit import AuditLog
 from app.db.models.user import utc_now
@@ -161,7 +160,7 @@ class PrerequisiteService:
             curriculum_version_id=version_id,
             prerequisite_course_id=prerequisite_course.id,
             target_course_id=target_course.id,
-            status=PrerequisiteStatus.PROPOSED.value,
+            status=PrerequisiteStatus.APPROVED.value,
             created_by=actor_id,
         )
         try:
@@ -296,12 +295,8 @@ class PrerequisiteService:
         return course
 
     def _ensure_draft(self, version_id: uuid.UUID) -> None:
-        version = self._versions.get_by_id(version_id)
-        if version is not None and version.status != VersionStatus.DRAFT.value:
-            raise ConflictError(
-                "Only draft curriculum versions can be modified",
-                "curriculum_version_not_editable",
-            )
+        # Prerequisites are recorded as active immediately; no draft gate applies.
+        return None
 
     def _audit(
         self,

@@ -1,7 +1,20 @@
 # Curriculum Management API
 
-Covers FR-02 through FR-06: curriculum creation, updates, versioning,
-course addition, and course updates.
+Covers curriculum creation and direct updates. The current product has no
+user-facing draft, approval, or version-history workflow. Curriculum content
+is edited in place and changes are effective immediately. The existing
+`curriculum_versions` row remains an internal storage key for foreign keys,
+audit, verification, and graph projection; only the current content is exposed
+in the UI. PEOs, POs, COs, mappings, and prerequisites are also created as
+immediately effective records.
+
+Covers FR-02 through FR-06: curriculum creation, updates, course addition,
+and course updates. FR-04 version-history behavior is retired. Historical
+workflow details in the remainder of this LLD are legacy reference only; their
+version creation, comparison, and approval endpoints are no longer registered.
+Course, CO, mapping, prerequisite, and graph URLs still contain an internal
+content key because the existing relational schema is version-scoped. Curriculum
+detail returns only the current content row.
 
 ## Authorization
 
@@ -18,9 +31,9 @@ All endpoints require a JWT bearer token.
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `POST` | `/api/v1/departments` | Create a department (`ADMIN`, `COMMITTEE_MEMBER`) |
+| `POST` | `/api/v1/departments` | Create a department (any authenticated user) |
 | `GET` | `/api/v1/departments` | List departments |
-| `POST` | `/api/v1/programs` | Create a program (`ADMIN`, `COMMITTEE_MEMBER`) |
+| `POST` | `/api/v1/programs` | Create a program (any authenticated user) |
 | `GET` | `/api/v1/programs` | List programs |
 | `GET` | `/api/v1/course-types` | List active course types |
 
@@ -116,12 +129,15 @@ Gemini models, avoiding truncation of larger semester, outcome, and mapping
 data.
 
 Generation returns a validated advisory draft; the generation endpoint itself
-does not persist it. The draft studio collects the destination program,
-academic year, regulation, and optional title before generation. Immediately
-after a successful generation it maps generated course categories to active
-course types, applies three credits to any course whose generated credit value
-is missing or outside the accepted `0 < credits <= 30` range, and submits the
-draft to `POST /api/v1/curriculum-drafts/save` automatically. Saving creates
+does not persist it. The primary `/generate-curriculum` flow asks the user to
+select a destination program and upload 1-5 reference documents. The documents
+are the generation source; the selected program provides the association for
+the saved curriculum. It defaults academic year to the current academic year
+and regulation to the current calendar year. Immediately after generation it maps
+generated course categories to active course types, applies three credits to
+any course whose generated credit value is missing or outside the accepted
+`0 < credits <= 30` range, and submits the draft to
+`POST /api/v1/curriculum-drafts/save` automatically. Saving creates
 the curriculum, version `1.0` (`DRAFT`), semesters, courses, course outcomes,
 PEO/PO versions (`DRAFT`), version pins, and CO–PO mappings with draft mapping
 versions in one database transaction. The operation never approves or publishes
@@ -130,11 +146,10 @@ outcome version; changed statements create a new draft outcome version. Invalid
 mappings or database conflicts reject the whole save without leaving partial
 records.
 
-If the automatic save fails, for example because the program already has a
-curriculum with that regulation or no course type matches a generated
-category, the generated preview remains available and the studio shows a
-manual save form prefilled with the same metadata and defaults. The manual
-fallback uses the same explicit endpoint and remains transactional. The
+If automatic saving fails, for example because no course type matches a
+generated category or the backend is unavailable, the flow reports the error
+on the program-selection page and allows the user to retry; it does not require
+a manual-save or approval step. The
 returned draft is advisory; if uploaded material omits PEOs or POs, the LLM
 proposes baseline suggestions for human review, not claims about the source.
 Every course outcome must have at least one valid CO–PO mapping. If the first
@@ -145,47 +160,34 @@ A draft that is still invalid after that repair attempt is reported as
 provider statuses, including 503 overload responses, are retried up to five
 times with bounded exponential backoff and jitter before that error is returned.
 
-## Draft studio and saved drafts
+## Direct curriculum generation
 
-The `/curriculum-drafts/new` draft studio collects program, academic year,
-regulation, optional title, a topic brief, reference documents, or a
-combination of brief and documents. The topic field is capped at 500
-characters; generation is enabled only when a topic or at least one file is
-present and the destination metadata and course-type configuration are
-available. A failed generation can be retried with the same inputs. After
-generation the draft is saved automatically as version `1.0` in `DRAFT` status;
-the results view reports whether the save succeeded and links to the curriculum
-workspace.
-
-If automatic saving fails, the results view keeps the generated content and
-shows an explicit save form prefilled with the original metadata. The preview
-also supports edits to semester name/focus, course title/category/credits/
-summary, course-outcome statements, PEO/PO statements, and CO–PO mapping
-strengths before the manual save. Course and outcome codes remain fixed to
-protect mapping references. Changing course categories requires selecting a
-course type for the new category. Removing the last mapping for any course
-outcome blocks save; the backend performs full schema/consistency validation
-and remains authoritative.
-
-Below the studio, a saved-drafts list reads `GET /api/v1/curricula`, filters
-curricula whose latest version is `DRAFT`, and displays the program, title,
-academic year, regulation, version label, and last update. Each row links to
-the curriculum workspace with the curriculum selected. The list is a read-only
-projection of the curriculum API; the curriculum workspace remains the place
-to review and edit saved drafts.
+The primary `/generate-curriculum` experience asks the user to select a
+program and upload 1-5 reference documents. The uploaded documents drive
+generation; the program selection determines where the result is saved. The
+flow defaults academic year to the current academic year and regulation to the
+current calendar year, and maps generated course categories to configured
+course types. Every successful generation is immediately saved as a separate, editable
+curriculum. There is no separate manual-save, draft review, or approval step.
+The relational compatibility row is created internally; its version label and
+status are not shown in the product. Multiple curricula may share the same
+program and regulation.
+On success, the user is redirected to `/curricula/{id}`. Errors
+remain on the selection page so the user can retry. The former detailed studio
+code remains but is not part of the normal user flow.
 
 ## Frontend test workspace
 
-The authenticated `/curricula` page provides an operator-facing interface for
-creating curricula from existing programs, adding departments/programs when the
-account has the required role, selecting versions, managing courses and course
+The authenticated `/curricula` page lists all saved curricula and each list
+item links to its selected curriculum in the workspace. The detail workspace
+shows only current curriculum content and provides no version selector, history,
+comparison, draft status, or approval controls. Authorized writers can manage
+courses and course
 outcomes, creating/reviewing program outcomes and CO–PO mappings, proposing and
 reviewing prerequisites, changing version status, and comparing versions.
-Actions are shown according to the current user's role and draft state; the API
-remains authoritative for authorization and transition validation. AI-generated
-draft output is saved automatically from the draft studio as a `DRAFT`
-curriculum version and is reviewed and edited in this workspace; generation
-never approves or publishes content.
+Actions are shown according to the current user's role; the API remains
+authoritative for authorization and validation. AI-generated curricula and
+outcomes are available immediately after generation, without a review step.
 
 Departments and programs are managed through an academic setup panel that is
 available to administrators and committee members at all times, rather than

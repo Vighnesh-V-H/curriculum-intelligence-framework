@@ -2,11 +2,13 @@
 
 ## Description
 
-The system shall allow authorized users to modify a curriculum
-before it reaches the published state.
+Authorized curriculum writers shall edit the current curriculum directly. Changes
+are saved immediately; there is no draft, review, approval, publication, or
+version-history workflow.
 
 ## Actors
 
+- Administrator
 - Curriculum Committee Member
 - Authorized Faculty
 
@@ -14,18 +16,18 @@ before it reaches the published state.
 
 Users shall be able to:
 
-- Add courses.
-- Remove courses.
-- Modify course information.
-- Change credits.
-- Change semester allocation.
-- Modify prerequisites.
-- Modify COs.
-- Modify PO mappings.
+- Add, modify, and remove courses.
+- Change credits and semester allocation.
+- Add and edit course outcomes (COs).
+- Add and edit program outcomes (POs) and program educational objectives (PEOs).
+- Add, edit, and remove CO–PO mappings and prerequisite relationships.
+- Update curriculum metadata.
 
 ## Business Rules
 
-- Only authorized users can modify a curriculum.
-- Published curriculum versions cannot be modified directly.
-- Changes to a published curriculum shall create a new version.
-- Previous versions must remain available for historical reference.
+- Authorized writers may make changes at any time; no approval status gates edits.
+- New or updated PEOs, POs, COs, mappings, and prerequisites are immediately
+  available in the current curriculum.
+- The system shall retain the existing audit trail for writes.
+- The interface shall show one current curriculum and shall not expose curriculum
+  versions, version comparison, or version approval controls.

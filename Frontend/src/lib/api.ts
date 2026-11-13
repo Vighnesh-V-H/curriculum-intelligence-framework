@@ -621,19 +621,6 @@ export const api = {
   updateCurriculum(id: string, payload: Record<string, unknown>): Promise<Curriculum> {
     return request<Curriculum>(`/api/v1/curricula/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
   },
-  getCurriculumVersions(curriculumId: string): Promise<CurriculumVersion[]> {
-    return request<CurriculumVersion[]>(`/api/v1/curricula/${curriculumId}/versions`);
-  },
-  createCurriculumVersion(curriculumId: string, payload: { version_label?: string; change_summary?: string }): Promise<CurriculumVersion> {
-    return request<CurriculumVersion>(`/api/v1/curricula/${curriculumId}/versions`, { method: "POST", body: JSON.stringify(payload) });
-  },
-  updateCurriculumVersionStatus(curriculumId: string, versionId: string, status: string): Promise<CurriculumVersion> {
-    return request<CurriculumVersion>(`/api/v1/curricula/${curriculumId}/versions/${versionId}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
-  },
-  compareCurriculumVersions(curriculumId: string, baseId: string, targetId: string): Promise<VersionComparison> {
-    const params = new URLSearchParams({ base_version_id: baseId, target_version_id: targetId });
-    return request<VersionComparison>(`/api/v1/curricula/${curriculumId}/compare?${params}`);
-  },
   createCourse(curriculumId: string, versionId: string, payload: Record<string, unknown>): Promise<Course> {
     return request(`/api/v1/curricula/${curriculumId}/versions/${versionId}/courses`, { method: "POST", body: JSON.stringify(payload) });
   },
@@ -656,9 +643,6 @@ export const api = {
   removeCourseOutcome(curriculumId: string, versionId: string, courseId: string, outcomeId: string): Promise<void> {
     return request(`/api/v1/curricula/${curriculumId}/versions/${versionId}/courses/${courseId}/outcomes/${outcomeId}`, { method: "DELETE" });
   },
-  reviewPrerequisite(curriculumId: string, versionId: string, prerequisiteId: string, status: "APPROVED" | "REJECTED", review_comments?: string): Promise<Prerequisite> {
-    return request(`/api/v1/curricula/${curriculumId}/versions/${versionId}/prerequisites/${prerequisiteId}/status`, { method: "PATCH", body: JSON.stringify({ status, review_comments }) });
-  },
   listProgramOutcomes(programId: string): Promise<Outcome[]> {
     return request(`/api/v1/programs/${programId}/program-outcomes`);
   },
@@ -677,10 +661,6 @@ export const api = {
   updatePeo(peoId: string, payload: { peo_code?: string; description?: string }): Promise<Outcome> {
     return request(`/api/v1/peos/${peoId}`, { method: "PATCH", body: JSON.stringify(payload) });
   },
-  updateOutcomeVersionStatus(kind: "po" | "peo", outcomeId: string, versionId: string, status: string, review_comments?: string): Promise<unknown> {
-    const base = kind === "po" ? "program-outcomes" : "peos";
-    return request(`/api/v1/${base}/${outcomeId}/versions/${versionId}/status`, { method: "PATCH", body: JSON.stringify({ status, review_comments }) });
-  },
   listMappingLevels(): Promise<MappingLevel[]> {
     return request("/api/v1/mapping-levels");
   },
@@ -692,9 +672,6 @@ export const api = {
   },
   updateMapping(mappingId: string, payload: { mapping_level_code: string }): Promise<Mapping> {
     return request(`/api/v1/mappings/${mappingId}`, { method: "PATCH", body: JSON.stringify(payload) });
-  },
-  updateMappingVersionStatus(mappingId: string, versionId: string, status: string, review_comments?: string): Promise<Mapping> {
-    return request(`/api/v1/mappings/${mappingId}/versions/${versionId}/status`, { method: "PATCH", body: JSON.stringify({ status, review_comments }) });
   },
   removeMapping(mappingId: string): Promise<void> {
     return request(`/api/v1/mappings/${mappingId}`, { method: "DELETE" });

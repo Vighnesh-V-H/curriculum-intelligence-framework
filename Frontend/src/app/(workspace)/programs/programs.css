@@ -1,0 +1,36 @@
+.programs-page { width: min(100%, 1180px); margin: 0 auto; color: var(--foreground); }
+.programs-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin: 4px 0 28px; }
+.programs-heading h1 { margin: 0 0 8px; font: 400 clamp(34px, 4vw, 46px)/1.05 Georgia, "Times New Roman", serif; letter-spacing: -.035em; }
+.programs-heading p, .programs-form > p { margin: 0; color: var(--muted-foreground); font-size: 13px; }
+.programs-count { padding: 7px 11px; border: 1px solid var(--border); border-radius: 5px; color: var(--muted-foreground); font-size: 12px; white-space: nowrap; }
+.programs-layout { display: grid; grid-template-columns: minmax(280px, .78fr) minmax(0, 1.22fr); align-items: start; gap: 22px; }
+.programs-form, .programs-list { min-width: 0; padding: clamp(18px, 2.5vw, 26px); border: 1px solid var(--border); border-radius: 7px; background: var(--card); }
+.programs-form h2, .programs-list h2 { margin: 0 0 9px; font: 400 21px/1.2 Georgia, "Times New Roman", serif; }
+.programs-form > p { margin-bottom: 20px; line-height: 1.55; }
+.programs-form label { display: grid; gap: 7px; margin-top: 15px; color: var(--foreground); font-size: 12px; font-weight: 550; }
+.programs-form input, .programs-form select { width: 100%; min-width: 0; min-height: 39px; padding: 8px 10px; border: 1px solid var(--input); border-radius: 5px; color: var(--foreground); background: var(--background); font: inherit; font-size: 12px; }
+.programs-form input::placeholder { color: var(--muted-foreground); opacity: .75; }
+.programs-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.programs-optional { color: var(--muted-foreground); font-size: 10px; font-weight: 400; }
+.programs-form button { min-height: 40px; margin-top: 20px; padding: 0 15px; border: 1px solid var(--primary); border-radius: 5px; color: var(--primary-foreground); background: var(--primary); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.programs-form button:hover { filter: brightness(1.08); }
+.programs-form button:disabled { cursor: not-allowed; opacity: .55; }
+.programs-form :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.programs-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.programs-list-heading h2 { margin: 0; }
+.programs-list-heading > span { display: grid; width: 27px; height: 27px; place-items: center; border-radius: 50%; color: var(--muted-foreground); background: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.programs-list ul { margin: 0; padding: 0; list-style: none; }
+.programs-list li { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 15px 0; border-bottom: 1px solid var(--border); }
+.programs-list li:last-child { border-bottom: 0; }
+.programs-list li > div { display: grid; min-width: 0; gap: 5px; }
+.programs-list li strong { overflow-wrap: anywhere; font-size: 13px; font-weight: 600; }
+.programs-list li > div > span, .programs-degree { color: var(--muted-foreground); font-size: 11px; }
+.programs-degree { flex: 0 0 auto; }
+.programs-empty { margin: 0; padding: 24px 0 8px; color: var(--muted-foreground); font-size: 13px; line-height: 1.5; }
+.programs-hint, .programs-message { padding: 10px 12px; border-radius: 5px; font-size: 12px; line-height: 1.5; }
+.programs-hint { margin: 12px 0 0; color: var(--muted-foreground); background: var(--muted); }
+.programs-message { margin: 0 0 12px; }
+.programs-message--error { color: var(--destructive); background: color-mix(in srgb, var(--destructive), var(--card) 94%); }
+.programs-message--success { color: var(--primary); background: color-mix(in srgb, var(--primary), var(--card) 94%); }
+@media (max-width: 760px) { .programs-layout { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .programs-heading { align-items: flex-start; flex-direction: column; gap: 12px; } .programs-fields { grid-template-columns: 1fr; gap: 0; } .programs-list li { align-items: flex-start; flex-direction: column; gap: 7px; } }

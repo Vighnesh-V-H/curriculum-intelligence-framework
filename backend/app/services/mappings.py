@@ -10,7 +10,6 @@ from app.db.models.academic import (
     CourseOutcomeStatus,
     Curriculum,
     CurriculumVersion,
-    VersionStatus,
 )
 from app.db.models.audit import AuditLog
 from app.db.models.mappings import (
@@ -23,6 +22,7 @@ from app.db.models.mappings import (
 )
 from app.db.models.outcomes import (
     OutcomeStatus,
+    OutcomeVersionStatus,
     ProgramOutcome,
     ProgramOutcomeVersion,
 )
@@ -145,12 +145,17 @@ class MappingService:
         ):
             raise NotFoundError("Program outcome not found or not active for this program")
 
-        approved_version = self._program_outcome_versions.get_approved(program_outcome.id)
+        outcome_versions = self._program_outcome_versions.list_by_parent(program_outcome.id)
+        approved_version = outcome_versions[-1] if outcome_versions else None
+        if (
+            approved_version is not None
+            and approved_version.status != OutcomeVersionStatus.APPROVED.value
+        ):
+            approved_version.status = OutcomeVersionStatus.APPROVED.value
+            approved_version.approved_by = actor_id
+            approved_version.approved_at = utc_now()
         if approved_version is None:
-            raise ConflictError(
-                "Program outcome has no approved version to map against",
-                "program_outcome_not_approved",
-            )
+            raise BadRequestError("Program outcome needs a description before it can be mapped")
 
         level = self._get_level_or_404(request.mapping_level_code)
         if self._mappings.get_active(version.id, course_outcome.id, program_outcome.id) is not None:
@@ -172,7 +177,9 @@ class MappingService:
             version_number=1,
             mapping_level_id=level.id,
             effective_date=request.effective_date,
-            status=MappingVersionStatus.DRAFT.value,
+            status=MappingVersionStatus.APPROVED.value,
+            approved_by=actor_id,
+            approved_at=utc_now(),
             created_by=actor_id,
         )
         try:
@@ -230,58 +237,28 @@ class MappingService:
                 raise BadRequestError("Mapping level cannot be empty")
             level = self._get_level_or_404(request.mapping_level_code)
 
-        ordered = sorted(mapping.versions, key=lambda item: item.version_number)
-        latest = ordered[-1] if ordered else None
+        latest = max(mapping.versions, key=lambda item: item.version_number, default=None)
         if latest is None:
             raise NotFoundError("Mapping version not found")
-        if latest.status == MappingVersionStatus.PROPOSED.value:
-            raise ConflictError(
-                "The latest mapping version is under review and cannot be modified",
-                "mapping_version_under_review",
-            )
-
-        if latest.status in (
-            MappingVersionStatus.DRAFT.value,
-            MappingVersionStatus.REJECTED.value,
-        ):
-            old_values = _version_snapshot(latest)
-            if level is not None:
-                latest.mapping_level_id = level.id
-                latest.mapping_level = level
-            if "effective_date" in changes:
-                latest.effective_date = request.effective_date
-            latest.status = MappingVersionStatus.DRAFT.value
-            latest.review_comments = None
-            self._audit(
-                actor_id,
-                "co_po_mapping_version",
-                latest.id,
-                "UPDATE",
-                curriculum_version_id=version.id,
-                old_values=old_values,
-                new_values=_version_snapshot(latest),
-            )
-        else:
-            source_level_id = level.id if level is not None else latest.mapping_level_id
-            new_version = CoPoMappingVersion(
-                mapping=mapping,
-                version_number=self._mapping_versions.next_version_number(mapping.id),
-                mapping_level_id=source_level_id,
-                effective_date=(
-                    request.effective_date if "effective_date" in changes else latest.effective_date
-                ),
-                status=MappingVersionStatus.DRAFT.value,
-                created_by=actor_id,
-            )
-            self._mapping_versions.add(new_version)
-            self._audit(
-                actor_id,
-                "co_po_mapping_version",
-                new_version.id,
-                "CREATE",
-                curriculum_version_id=version.id,
-                new_values=_version_snapshot(new_version),
-            )
+        old_values = _version_snapshot(latest)
+        if level is not None:
+            latest.mapping_level_id = level.id
+            latest.mapping_level = level
+        if "effective_date" in changes:
+            latest.effective_date = request.effective_date
+        latest.status = MappingVersionStatus.APPROVED.value
+        latest.approved_by = actor_id
+        latest.approved_at = utc_now()
+        latest.review_comments = None
+        self._audit(
+            actor_id,
+            "co_po_mapping_version",
+            latest.id,
+            "UPDATE",
+            curriculum_version_id=version.id,
+            old_values=old_values,
+            new_values=_version_snapshot(latest),
+        )
 
         self._session.commit()
         return self.get_mapping(mapping.id)
@@ -436,11 +413,8 @@ class MappingService:
         return level
 
     def _ensure_editable(self, version: CurriculumVersion) -> None:
-        if version.status != VersionStatus.DRAFT.value:
-            raise ConflictError(
-                "Only draft curriculum versions can be modified",
-                "curriculum_version_not_editable",
-            )
+        # Active curriculum content is mutable; no draft/approval gate applies.
+        return None
 
     def _audit(
         self,

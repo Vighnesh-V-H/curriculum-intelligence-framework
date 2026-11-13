@@ -6,8 +6,6 @@ from app.api.deps import get_current_user, get_outcome_service, require_roles
 from app.db.models.user import RoleCode, User
 from app.schemas.outcomes import (
     OutcomeStatusUpdate,
-    OutcomeVersionResponse,
-    OutcomeVersionStatusUpdate,
     ProgramEducationalObjectiveCreate,
     ProgramEducationalObjectiveResponse,
     ProgramEducationalObjectiveUpdate,
@@ -19,7 +17,7 @@ from app.services.outcomes import OutcomeService
 
 router = APIRouter(tags=["program-outcomes"])
 
-OUTCOME_WRITE_ROLES = (RoleCode.ADMIN, RoleCode.COMMITTEE_MEMBER)
+OUTCOME_WRITE_ROLES = (RoleCode.ADMIN, RoleCode.COMMITTEE_MEMBER, RoleCode.FACULTY)
 
 
 @router.post(
@@ -86,32 +84,6 @@ def update_program_outcome_status(
     return service.update_program_outcome_status(actor.id, outcome_id, payload)
 
 
-@router.get(
-    "/program-outcomes/{outcome_id}/versions",
-    response_model=list[OutcomeVersionResponse],
-)
-def list_program_outcome_versions(
-    outcome_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
-    service: OutcomeService = Depends(get_outcome_service),
-) -> list[OutcomeVersionResponse]:
-    return service.list_program_outcome_versions(outcome_id)
-
-
-@router.patch(
-    "/program-outcomes/{outcome_id}/versions/{version_id}/status",
-    response_model=OutcomeVersionResponse,
-)
-def update_program_outcome_version_status(
-    outcome_id: uuid.UUID,
-    version_id: uuid.UUID,
-    payload: OutcomeVersionStatusUpdate,
-    actor: User = Depends(require_roles(*OUTCOME_WRITE_ROLES)),
-    service: OutcomeService = Depends(get_outcome_service),
-) -> OutcomeVersionResponse:
-    return service.update_program_outcome_version_status(actor.id, outcome_id, version_id, payload)
-
-
 @router.post(
     "/programs/{program_id}/peos",
     response_model=ProgramEducationalObjectiveResponse,
@@ -174,29 +146,3 @@ def update_peo_status(
     service: OutcomeService = Depends(get_outcome_service),
 ) -> ProgramEducationalObjectiveResponse:
     return service.update_peo_status(actor.id, peo_id, payload)
-
-
-@router.get(
-    "/peos/{peo_id}/versions",
-    response_model=list[OutcomeVersionResponse],
-)
-def list_peo_versions(
-    peo_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
-    service: OutcomeService = Depends(get_outcome_service),
-) -> list[OutcomeVersionResponse]:
-    return service.list_peo_versions(peo_id)
-
-
-@router.patch(
-    "/peos/{peo_id}/versions/{version_id}/status",
-    response_model=OutcomeVersionResponse,
-)
-def update_peo_version_status(
-    peo_id: uuid.UUID,
-    version_id: uuid.UUID,
-    payload: OutcomeVersionStatusUpdate,
-    actor: User = Depends(require_roles(*OUTCOME_WRITE_ROLES)),
-    service: OutcomeService = Depends(get_outcome_service),
-) -> OutcomeVersionResponse:
-    return service.update_peo_version_status(actor.id, peo_id, version_id, payload)

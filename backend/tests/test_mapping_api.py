@@ -67,15 +67,6 @@ def make_mapping(client, admin_token, program):
     )
     assert po_response.status_code == 201
     po = po_response.json()
-    for status in ("PROPOSED", "APPROVED"):
-        status_response = client.patch(
-            f"/api/v1/program-outcomes/{po['id']}/versions/"
-            f"{po['current_version']['id']}/status",
-            json={"status": status},
-            headers=bearer(admin_token),
-        )
-        assert status_response.status_code == 200
-
     mapping_response = client.post(
         f"/api/v1/curricula/{curriculum['id']}/versions/{version['id']}/mappings",
         json={
@@ -89,18 +80,7 @@ def make_mapping(client, admin_token, program):
     return curriculum, version, mapping_response.json()
 
 
-def change_mapping_status(client, admin_token, mapping, status):
-    response = client.patch(
-        f"/api/v1/mappings/{mapping['id']}/versions/"
-        f"{mapping['current_version']['id']}/status",
-        json={"status": status},
-        headers=bearer(admin_token),
-    )
-    assert response.status_code == 200, response.json()
-    return response.json()
-
-
-def test_mapping_level_update_applies_to_draft_version(
+def test_mapping_level_update_applies_immediately_in_place(
     client, admin_token, program
 ):
     seed_mapping_levels()
@@ -115,19 +95,15 @@ def test_mapping_level_update_applies_to_draft_version(
     assert response.status_code == 200
     body = response.json()
     assert body["current_version"]["mapping_level_code"] == "HIGH"
-    assert body["current_version"]["status"] == "DRAFT"
+    assert body["current_version"]["status"] == "APPROVED"
     assert len(body["versions"]) == 1
 
 
-def test_mapping_level_update_after_approval_creates_draft_version(
+def test_mapping_level_update_after_creation_updates_in_place(
     client, admin_token, program
 ):
     seed_mapping_levels()
     _, _, mapping = make_mapping(client, admin_token, program)
-    change_mapping_status(client, admin_token, mapping, "PROPOSED")
-    approved = change_mapping_status(client, admin_token, mapping, "APPROVED")
-    assert approved["status"] == "APPROVED"
-
     response = client.patch(
         f"/api/v1/mappings/{mapping['id']}",
         json={"mapping_level_code": "HIGH"},
@@ -136,28 +112,22 @@ def test_mapping_level_update_after_approval_creates_draft_version(
 
     assert response.status_code == 200
     body = response.json()
-    assert body["current_version"]["mapping_level_code"] == "MEDIUM"
+    assert body["current_version"]["mapping_level_code"] == "HIGH"
     assert body["current_version"]["status"] == "APPROVED"
-    assert len(body["versions"]) == 2
-    newest = body["versions"][-1]
-    assert newest["version_number"] == 2
-    assert newest["mapping_level_code"] == "HIGH"
-    assert newest["status"] == "DRAFT"
+    assert len(body["versions"]) == 1
 
 
-def test_mapping_under_review_cannot_be_edited(client, admin_token, program):
+def test_mapping_can_be_edited_without_review_workflow(client, admin_token, program):
     seed_mapping_levels()
     _, _, mapping = make_mapping(client, admin_token, program)
-    change_mapping_status(client, admin_token, mapping, "PROPOSED")
-
     response = client.patch(
         f"/api/v1/mappings/{mapping['id']}",
         json={"mapping_level_code": "HIGH"},
         headers=bearer(admin_token),
     )
 
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == "mapping_version_under_review"
+    assert response.status_code == 200
+    assert response.json()["current_version"]["mapping_level_code"] == "HIGH"
 
 
 def test_mapping_removal_deactivates_mapping(client, admin_token, program):

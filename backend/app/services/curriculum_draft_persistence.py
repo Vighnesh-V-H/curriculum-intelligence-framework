@@ -34,7 +34,7 @@ from app.db.models.outcomes import (
     ProgramOutcome,
     ProgramOutcomeVersion,
 )
-from app.db.models.user import User
+from app.db.models.user import User, utc_now
 from app.repositories.academic import CourseTypeRepository, ProgramRepository
 from app.repositories.audit import AuditLogRepository
 from app.repositories.courses import CourseOutcomeRepository, CourseRepository
@@ -99,12 +99,6 @@ class CurriculumDraftPersistenceService:
         program = self._programs.get_by_id(request.program_id)
         if program is None:
             raise NotFoundError("Program not found")
-        if self._curricula.get_by_program_regulation(program.id, request.regulation) is not None:
-            raise ConflictError(
-                "A curriculum with this regulation already exists for the program",
-                "curriculum_exists",
-            )
-
         types = self._resolve_course_types(request)
         levels = {level.numeric_value: level for level in self._mapping_levels.list_active()}
         missing_levels = {mapping.level for mapping in request.draft.mappings} - levels.keys()
@@ -130,8 +124,8 @@ class CurriculumDraftPersistenceService:
             version = CurriculumVersion(
                 curriculum_id=curriculum.id,
                 version_label="1.0",
-                status=VersionStatus.DRAFT.value,
-                change_summary="Created from a reviewed AI-generated curriculum draft.",
+                status=VersionStatus.APPROVED.value,
+                change_summary="Created directly from AI-generated curriculum content.",
                 created_by=actor.id,
             )
             self._versions.add(version)
@@ -253,7 +247,9 @@ class CurriculumDraftPersistenceService:
                         mapping_id=mapping_row.id,
                         version_number=1,
                         mapping_level_id=levels[mapping.level].id,
-                        status=MappingVersionStatus.DRAFT.value,
+                        status=MappingVersionStatus.APPROVED.value,
+                        approved_by=actor.id,
+                        approved_at=utc_now(),
                         created_by=actor.id,
                     )
                 )
@@ -327,7 +323,9 @@ class CurriculumDraftPersistenceService:
                 version = version_model(
                     version_number=1,
                     description=definition.statement.strip(),
-                    status=OutcomeVersionStatus.DRAFT.value,
+                    status=OutcomeVersionStatus.APPROVED.value,
+                    approved_by=actor_id,
+                    approved_at=utc_now(),
                     created_by=actor_id,
                 )
                 self._attach_version(outcome, version, entity_type)
@@ -335,21 +333,19 @@ class CurriculumDraftPersistenceService:
                 self._audit(actor_id, entity_type, outcome.id, None, "CREATE", {code_field: code})
             else:
                 existing_versions = versions.list_by_parent(outcome.id)
-                matching = next(
-                    (
-                        row
-                        for row in reversed(existing_versions)
-                        if row.description.strip() == definition.statement.strip()
-                    ),
-                    None,
-                )
-                if matching is not None:
-                    version = matching
+                if existing_versions:
+                    version = existing_versions[-1]
+                    version.description = definition.statement.strip()
+                    version.status = OutcomeVersionStatus.APPROVED.value
+                    version.approved_by = actor_id
+                    version.approved_at = utc_now()
                 else:
                     version = version_model(
-                        version_number=versions.next_version_number(outcome.id),
+                        version_number=1,
                         description=definition.statement.strip(),
-                        status=OutcomeVersionStatus.DRAFT.value,
+                        status=OutcomeVersionStatus.APPROVED.value,
+                        approved_by=actor_id,
+                        approved_at=utc_now(),
                         created_by=actor_id,
                     )
                     self._attach_version(outcome, version, entity_type)

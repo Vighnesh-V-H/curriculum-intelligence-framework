@@ -77,7 +77,7 @@ export default function DashboardPage() {
         <div>
           <p className="dashboard-eyebrow">CURRICULUM INTELLIGENCE</p>
           <h1>Your curriculum workspace</h1>
-          <p>Welcome, {user.full_name}. Start a draft or continue with your source material.</p>
+          <p>Welcome, {user.full_name}. Generate and review curricula for your programs.</p>
         </div>
         <Badge variant="outline" className="dashboard-status">
           <span className="dashboard-status__dot" aria-hidden="true" />
@@ -91,23 +91,19 @@ export default function DashboardPage() {
             <Sparkles aria-hidden="true" />
             Curriculum design
           </div>
-          <h2 id="dashboard-draft-title">Turn source material into a curriculum draft.</h2>
-          <p>
-            Bring your program documents together, then generate and review a semester roadmap,
-            course outcomes, and proposed mappings. Each draft is saved to the curriculum workspace
-            automatically.
-          </p>
+          <h2 id="dashboard-draft-title">Generate a curriculum for a program.</h2>
+          <p>Select a program to create and save its curriculum directly to the curriculum workspace.</p>
           {canDraft ? (
-            <Link className="dashboard-draft-entry__action" href="/curriculum-drafts/new">
-              Open draft studio
+            <Link className="dashboard-draft-entry__action" href="/generate-curriculum">
+              Generate Curriculum
               <ArrowRight aria-hidden="true" />
             </Link>
           ) : (
-            <p className="dashboard-draft-entry__access-note">Your role does not include curriculum draft generation.</p>
+            <p className="dashboard-draft-entry__access-note">Your role does not include curriculum generation.</p>
           )}
-          <span className="dashboard-draft-entry__note">AI-generated draft · saved in DRAFT status</span>
+          <span className="dashboard-draft-entry__note">Saved automatically to Curricula</span>
         </div>
-        <ol className="dashboard-workflow" aria-label="Draft workflow">
+        <ol className="dashboard-workflow" aria-label="Draft workflow" hidden>
           <li>
             <span>01</span>
             <div><strong>Source documents</strong><small>Upload your reference material</small></div>
