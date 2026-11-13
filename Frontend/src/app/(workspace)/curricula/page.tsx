@@ -3,13 +3,14 @@
 import "./curricula.css";
 import { FormEvent, ReactNode, useCallback, useEffect, useState } from "react";
 import { CurriculumGraph } from "@/components/curriculum-graph";
+import { KnowledgeGraphPanel } from "@/components/knowledge-graph";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ApiError, api, Course, CourseOutcome, CourseOutcomeChange, CourseType, Curriculum, CurriculumVersion, Department, Mapping, MappingChange, MappingLevel, ModifiedCourseOutcome, ModifiedMapping, ModifiedProgramOutcome, Outcome, Prerequisite, PrerequisiteChange, Program, ProgramOutcomeChange, VersionComparison } from "@/lib/api";
 
 const WRITERS = new Set(["ADMIN", "COMMITTEE_MEMBER", "FACULTY"]);
 const REVIEWERS = new Set(["ADMIN", "COMMITTEE_MEMBER"]);
 type Detail = Curriculum & { versions: CurriculumVersion[] };
-type Tab = "courses" | "structure" | "outcomes" | "mappings" | "prerequisites" | "versions";
+type Tab = "courses" | "structure" | "graph" | "outcomes" | "mappings" | "prerequisites" | "versions";
 
 function message(error: unknown) {
   return error instanceof ApiError ? error.message : "The request could not be completed.";
@@ -309,7 +310,7 @@ export default function CurriculaPage() {
   const courses = selectedVersion?.courses ?? [];
   const allOutcomes = courses.flatMap((course) => (courseOutcomes[course.id] ?? []).map((outcome) => ({ ...outcome, course_code: course.course_code })));
   const tabs: { id: Tab; label: string }[] = [
-    { id: "courses", label: "Courses & COs" }, { id: "structure", label: "Structure & dependencies" },
+    { id: "courses", label: "Courses & COs" }, { id: "structure", label: "Structure & dependencies" }, { id: "graph", label: "Knowledge graph" },
     { id: "outcomes", label: "Program outcomes" },
     { id: "mappings", label: "CO–PO mappings" }, { id: "prerequisites", label: "Prerequisites" }, { id: "versions", label: "Versions" },
   ];
@@ -407,6 +408,13 @@ export default function CurriculaPage() {
         <div className="academic-panel">
           <h2>Dependency graph</h2>
           <CurriculumGraph courses={courses} prerequisites={prerequisites} courseOutcomes={courseOutcomes} />
+        </div>
+      </section>}
+      {tab === "graph" && <section className="academic-workspace--stacked">
+        <div className="academic-panel">
+          <h2>Knowledge graph</h2>
+          <p>Version-scoped Neo4j projection of courses, outcomes, semesters, mappings, and prerequisite relationships.</p>
+          {detail && versionId ? <KnowledgeGraphPanel key={`${detail.id}-${versionId}`} curriculumId={detail.id} versionId={versionId} canWrite={canWrite} /> : <p className="academic-empty">Select a curriculum version to inspect its projection.</p>}
         </div>
       </section>}
       {tab === "outcomes" && <section className="academic-workspace"><div className="academic-panel"><h2>Program outcomes</h2><OutcomeList title="POs" rows={programOutcomes} codeKey="po_code" canReview={canReview} busy={busy} onUpdate={(event, row) => void updateOutcome("po", row.id, event)} onStatus={(row, status) => void run(() => api.updateOutcomeVersionStatus("po", row.id, row.current_version!.id, status), `PO ${status.toLowerCase()}.`)} /><OutcomeList title="PEOs" rows={peos} codeKey="peo_code" canReview={canReview} busy={busy} onUpdate={(event, row) => void updateOutcome("peo", row.id, event)} onStatus={(row, status) => void run(() => api.updateOutcomeVersionStatus("peo", row.id, row.current_version!.id, status), `PEO ${status.toLowerCase()}.`)} /></div>{canReview && <div className="academic-panel"><h2>Add outcomes</h2><OutcomeForm title="Program outcome" codeLabel="PO code" onSubmit={(event) => createOutcome(event, "po")} busy={busy} /><OutcomeForm title="Program educational objective" codeLabel="PEO code" onSubmit={(event) => createOutcome(event, "peo")} busy={busy} /></div>}</section>}
