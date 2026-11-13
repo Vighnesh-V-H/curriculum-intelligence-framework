@@ -8,6 +8,7 @@ import {
   ArrowDownToLine,
   ArrowLeft,
   ArrowRight,
+  BookOpen,
   Check,
   FileText,
   GraduationCap,
@@ -38,13 +39,23 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ApiError, api } from "@/lib/api";
-import type { CourseType, CurriculumDraft, DraftCourse, DraftMapping, DraftOutcome, DraftSemester, Program } from "@/lib/api";
+import type { CourseType, Curriculum, CurriculumDraft, DraftCourse, DraftMapping, DraftOutcome, DraftSemester, Program } from "@/lib/api";
 
 const ALLOWED_EXTENSIONS = [".pdf", ".docx", ".txt", ".md", ".csv"];
 const MAX_FILE_MB = 20;
 const MAX_FILES = 5;
+const DEFAULT_DRAFT_CREDITS = 3;
 
 type DraftView = "roadmap" | "outcomes";
+
+type DraftMetadata = {
+  program_id: string;
+  academic_year: string;
+  regulation: string;
+  title: string;
+};
+
+type BusyPhase = "idle" | "generating" | "saving";
 
 function fileExtension(filename: string): string {
   const dot = filename.lastIndexOf(".");
@@ -58,7 +69,6 @@ function formatBytes(bytes: number): string {
 }
 
 function validateFiles(files: File[]): string | null {
-  if (files.length === 0) return "Choose at least one source document.";
   if (files.length > MAX_FILES) return `Choose no more than ${MAX_FILES} files.`;
   for (const file of files) {
     if (!ALLOWED_EXTENSIONS.includes(fileExtension(file.name))) {
@@ -101,6 +111,87 @@ function downloadDraft(draft: CurriculumDraft): void {
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function draftCategories(draft: CurriculumDraft): string[] {
+  return [
+    ...new Set(
+      draft.semesters.flatMap((semester) =>
+        semester.courses
+          .map((course) => course.category.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    ),
+  ];
+}
+
+function matchCourseType(category: string, courseTypes: CourseType[]): string {
+  const exact = courseTypes.find((type) => type.code.toLowerCase() === category);
+  const partial = courseTypes.find(
+    (type) =>
+      category.includes(type.code.toLowerCase())
+      || type.name.toLowerCase().includes(category),
+  );
+  const core = courseTypes.find((type) => type.code.toUpperCase() === "CORE");
+  const only = courseTypes.length === 1 ? courseTypes[0] : undefined;
+  return (exact ?? partial ?? core ?? only)?.code ?? "";
+}
+
+function courseTypeDefaults(
+  draft: CurriculumDraft,
+  courseTypes: CourseType[],
+): Record<string, string> {
+  return Object.fromEntries(
+    draftCategories(draft).map((category) => [
+      category,
+      matchCourseType(category, courseTypes),
+    ]),
+  );
+}
+
+function applyDefaultCredits(draft: CurriculumDraft): {
+  draft: CurriculumDraft;
+  defaulted: string[];
+} {
+  const defaulted: string[] = [];
+  let changed = false;
+  const semesters = draft.semesters.map((semester) => ({
+    ...semester,
+    courses: semester.courses.map((course) => {
+      const category = course.category.trim() || "General";
+      const hasValidCredits = course.credits !== null
+        && course.credits > 0
+        && course.credits <= 30;
+      if (hasValidCredits && category === course.category) return course;
+      changed = true;
+      if (!hasValidCredits) defaulted.push(course.code);
+      return {
+        ...course,
+        category,
+        credits: hasValidCredits ? course.credits : DEFAULT_DRAFT_CREDITS,
+      };
+    }),
+  }));
+  return {
+    draft: changed ? { ...draft, semesters } : draft,
+    defaulted,
+  };
+}
+
+function formatSavedDraftDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function draftRows(rows: Curriculum[]): Curriculum[] {
+  return rows
+    .filter((row) => row.latest_version?.status === "DRAFT")
+    .sort((left, right) => Date.parse(right.updated_at) - Date.parse(left.updated_at));
 }
 
 function CourseEntry({
@@ -198,11 +289,105 @@ function CourseEntry({
   );
 }
 
+function SavedDraftsList({ refreshKey = 0 }: { refreshKey?: number }) {
+  const [drafts, setDrafts] = useState<Curriculum[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    api.listCurricula()
+      .then((rows) => {
+        if (cancelled) return;
+        setDrafts(draftRows(rows));
+        setLoadError("");
+      })
+      .catch((caught) => {
+        if (!cancelled) {
+          setLoadError(
+            caught instanceof ApiError
+              ? caught.message
+              : "Could not load saved drafts.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshKey]);
+
+  return (
+    <section className="draft-saved" aria-labelledby="draft-saved-title">
+      <header className="draft-saved__header">
+        <div>
+          <p><BookOpen aria-hidden="true" /> Curriculum workspace</p>
+          <h2 id="draft-saved-title">Saved drafts</h2>
+          <span>Curricula whose latest version is still a draft, newest first.</span>
+        </div>
+        {!loading && !loadError ? (
+          <Badge variant="outline">
+            {drafts.length} {drafts.length === 1 ? "draft" : "drafts"}
+          </Badge>
+        ) : null}
+      </header>
+      {loading ? (
+        <div className="draft-saved__status" role="status">
+          <Spinner />
+          <span>Loading saved drafts…</span>
+        </div>
+      ) : null}
+      {loadError ? (
+        <p className="draft-save__error" role="alert">{loadError}</p>
+      ) : null}
+      {!loading && !loadError && drafts.length === 0 ? (
+        <p className="draft-empty-state">
+          No saved drafts yet. Generate a curriculum and it will appear here.
+        </p>
+      ) : null}
+      {!loading && !loadError && drafts.length > 0 ? (
+        <ul className="draft-saved__list">
+          {drafts.map((draft) => (
+            <li key={draft.id}>
+              <div className="draft-saved__identity">
+                <span>{draft.program_code} · {draft.program_name}</span>
+                <strong>{draft.title ?? `${draft.program_name} curriculum`}</strong>
+                <p>{draft.academic_year} · Regulation {draft.regulation}</p>
+              </div>
+              <div className="draft-saved__side">
+                <div className="draft-saved__badges">
+                  <Badge variant="secondary">Draft</Badge>
+                  <span>v{draft.latest_version?.version_label ?? "1.0"}</span>
+                </div>
+                <small>Updated {formatSavedDraftDate(draft.updated_at)}</small>
+                <Link href={`/curricula?curriculum=${draft.id}`}>
+                  Open workspace
+                  <ArrowRight aria-hidden="true" />
+                </Link>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
 function DraftResults({
   draft,
+  metadata,
+  initialSavedCurriculumId,
+  initialSaveError,
+  defaultedCredits,
   onStartOver,
 }: {
   draft: CurriculumDraft;
+  metadata: DraftMetadata;
+  initialSavedCurriculumId: string;
+  initialSaveError: string;
+  defaultedCredits: string[];
   onStartOver: () => void;
 }) {
   const [view, setView] = useState<DraftView>("roadmap");
@@ -212,15 +397,13 @@ function DraftResults({
   const [courseTypes, setCourseTypes] = useState<CourseType[]>([]);
   const [courseTypeCodes, setCourseTypeCodes] = useState<Record<string, string>>({});
   const [saveBusy, setSaveBusy] = useState(false);
-  const [saveError, setSaveError] = useState("");
-  const [savedCurriculumId, setSavedCurriculumId] = useState("");
-  const categories = [
-    ...new Set(
-      workingDraft.semesters.flatMap((semester) =>
-        semester.courses.map((course) => course.category.trim().toLowerCase()).filter(Boolean),
-      ),
-    ),
-  ];
+  const [saveError, setSaveError] = useState(initialSaveError);
+  const [optionsError, setOptionsError] = useState("");
+  const [savedCurriculumId, setSavedCurriculumId] = useState(initialSavedCurriculumId);
+  const [activeMetadata, setActiveMetadata] = useState(metadata);
+  const [savedDraftsRefreshKey, setSavedDraftsRefreshKey] = useState(0);
+  const [saveProgramId, setSaveProgramId] = useState(metadata.program_id);
+  const categories = draftCategories(workingDraft);
   const missingCreditCourses = workingDraft.semesters
     .flatMap((semester) => semester.courses)
     .filter((course) => course.credits === null);
@@ -294,15 +477,9 @@ function DraftResults({
         if (cancelled) return;
         setPrograms(programRows);
         setCourseTypes(typeRows);
-        const codes = Object.fromEntries(categories.map((category) => {
-          const matched = typeRows.find((type) => type.code.toLowerCase() === category)
-            ?? typeRows.find((type) => category.includes(type.code.toLowerCase()) || type.name.toLowerCase().includes(category))
-            ?? typeRows.find((type) => type.code === "CORE");
-          return [category, matched?.code ?? typeRows[0]?.code ?? ""];
-        }));
-        setCourseTypeCodes(codes);
+        setCourseTypeCodes(courseTypeDefaults(workingDraft, typeRows));
       })
-      .catch((caught) => setSaveError(caught instanceof ApiError ? caught.message : "Could not load programs and course types."));
+      .catch((caught) => setOptionsError(caught instanceof ApiError ? caught.message : "Could not load programs and course types."));
     return () => { cancelled = true; };
   // Seed defaults from the generated categories; edited categories require a new choice.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -314,18 +491,25 @@ function DraftResults({
     const credits = Object.fromEntries(missingCreditCourses.map((course) => [
       course.code.toUpperCase(), Number(form.get(`credits:${course.code}`)),
     ]));
+    const nextMetadata: DraftMetadata = {
+      program_id: String(form.get("program_id")),
+      academic_year: String(form.get("academic_year")).trim(),
+      regulation: String(form.get("regulation")).trim(),
+      title: String(form.get("title") || "").trim(),
+    };
     setSaveBusy(true); setSaveError("");
     try {
       const saved = await api.saveCurriculumDraft({
-        program_id: String(form.get("program_id")),
-        academic_year: String(form.get("academic_year")),
-        regulation: String(form.get("regulation")),
-        title: String(form.get("title") || "") || null,
+        ...nextMetadata,
+        title: nextMetadata.title || null,
         course_type_codes: courseTypeCodes,
         credits_by_course_code: credits,
         draft: workingDraft,
       });
+      setActiveMetadata(nextMetadata);
       setSavedCurriculumId(saved.id);
+      setEditing(false);
+      setSavedDraftsRefreshKey((current) => current + 1);
     } catch (caught) {
       setSaveError(caught instanceof ApiError ? caught.message : "Could not save the curriculum draft.");
     } finally { setSaveBusy(false); }
@@ -387,14 +571,22 @@ function DraftResults({
         </div>
       </div>
 
-      {editing && <p className="draft-editing-note" role="status">Changes apply to this preview only. Review mappings and required fields before saving.</p>}
+      {editing && <p className="draft-editing-note" role="status">Changes apply to this draft. Review mappings and required fields before saving.</p>}
+      {defaultedCredits.length > 0 ? (
+        <p className="draft-default-note" role="note">
+          No usable credit value was generated for {defaultedCredits.join(", ")}; {DEFAULT_DRAFT_CREDITS} credits were applied automatically.
+        </p>
+      ) : null}
       <header className="draft-results__intro">
         <div className="draft-results__eyebrow">
           <Badge variant="secondary">
-            <Check data-icon="inline-start" aria-hidden="true" />
-            Preview only
+            {savedCurriculumId ? (
+              <><Check data-icon="inline-start" aria-hidden="true" /> Saved as draft</>
+            ) : (
+              <><FileText data-icon="inline-start" aria-hidden="true" /> Not saved yet</>
+            )}
           </Badge>
-          <span>Generated curriculum draft</span>
+          <span>{savedCurriculumId ? "Generated and saved curriculum draft" : "Generated curriculum draft"}</span>
         </div>
         <div className="draft-results__title-row">
           <div>
@@ -404,6 +596,8 @@ function DraftResults({
             ) : <p>{workingDraft.program.summary}</p>}
           </div>
           <div className="draft-results__program-meta">
+            {activeMetadata.academic_year ? <span>{activeMetadata.academic_year}</span> : null}
+            {activeMetadata.regulation ? <span>{activeMetadata.regulation}</span> : null}
             {workingDraft.program.degree ? <span>{workingDraft.program.degree}</span> : null}
             {workingDraft.program.duration_years ? (
               <span>{workingDraft.program.duration_years} years</span>
@@ -615,49 +809,98 @@ function DraftResults({
 
       <section className="draft-save" aria-labelledby="draft-save-title">
         <div className="draft-save__intro">
-          <p>Reviewed draft</p>
-          <h2 id="draft-save-title">Save this as a curriculum</h2>
-          <span>Saving creates curriculum version 1.0 as a draft. Generated PEOs, POs, and mappings remain unapproved for academic review.</span>
+          <p>{savedCurriculumId ? "Saved draft" : "Manual save required"}</p>
+          <h2 id="draft-save-title">
+            {savedCurriculumId ? "This curriculum is in the workspace" : "Save this curriculum draft"}
+          </h2>
+          <span>
+            {savedCurriculumId
+              ? `Stored as version 1.0 for ${activeMetadata.academic_year} · ${activeMetadata.regulation}. Nothing was approved or published.`
+              : "The draft is still available in this preview. Review the metadata, assign course types, and save it manually."}
+          </span>
         </div>
         {savedCurriculumId ? (
           <div className="draft-save__success" role="status">
-            <strong>Curriculum draft saved.</strong>
-            <p>It is stored as version 1.0 in draft status; nothing was approved or published.</p>
-            <Link href="/curricula">Open curriculum workspace</Link>
+            <strong>Curriculum draft saved to the database.</strong>
+            <p>It is stored as version 1.0 in DRAFT status. Generated PEOs, POs, and mappings remain unapproved for academic review.</p>
+            <Link href={`/curricula?curriculum=${savedCurriculumId}`}>Open curriculum workspace</Link>
           </div>
         ) : (
           <form className="draft-save__form" onSubmit={saveDraft}>
+            {saveError && <p className="draft-save__error" role="alert">{saveError}</p>}
+            {optionsError && <p className="draft-save__error" role="alert">{optionsError}</p>}
             <div className="draft-save__fields">
-              <label>Program<select name="program_id" required defaultValue=""><option value="" disabled>Select an existing program</option>{programs.map((program) => <option key={program.id} value={program.id}>{program.code} · {program.name}</option>)}</select></label>
-              <label>Academic year<input name="academic_year" required placeholder="2026–2027" /></label>
-              <label>Regulation<input name="regulation" required placeholder="R2026" /></label>
-              <label>Curriculum title<input name="title" defaultValue={workingDraft.program.name ?? ""} /></label>
+              <label>Program<select name="program_id" required value={saveProgramId} onChange={(event) => setSaveProgramId(event.target.value)}><option value="" disabled>Select an existing program</option>{programs.map((program) => <option key={program.id} value={program.id}>{program.code} · {program.name}</option>)}</select></label>
+              <label>Academic year<input name="academic_year" required defaultValue={metadata.academic_year} placeholder="2026–2027" /></label>
+              <label>Regulation<input name="regulation" required defaultValue={metadata.regulation} placeholder="R2026" /></label>
+              <label>Curriculum title<input name="title" defaultValue={metadata.title || workingDraft.program.name || ""} /></label>
             </div>
             <div className="draft-save__categories">
               <h3>Map generated course categories</h3>
               {categories.map((category) => <label key={category}>{category}<select value={courseTypeCodes[category] ?? ""} onChange={(event) => setCourseTypeCodes((current) => ({ ...current, [category]: event.target.value }))} required><option value="" disabled>Select course type</option>{courseTypes.map((type) => <option key={type.code} value={type.code}>{type.name} ({type.code})</option>)}</select></label>)}
             </div>
             {missingCreditCourses.length > 0 && <div className="draft-save__credits"><h3>Credits not provided in the draft</h3>{missingCreditCourses.map((course) => <label key={course.code}>{course.code} · {course.title}<input name={`credits:${course.code}`} type="number" min="0.5" max="30" step="0.5" defaultValue="3" required /></label>)}</div>}
-            {saveError && <p className="draft-save__error" role="alert">{saveError}</p>}
             <div className="draft-save__submit"><p>The save is all-or-nothing. Existing PEO/PO codes are versioned; curriculum and generated mappings stay in draft status.{!canSave ? " Keep every course outcome mapped and assign a type to each category." : ""}</p><Button type="submit" disabled={saveBusy || !programs.length || !courseTypes.length || !canSave}>{saveBusy ? <><Spinner data-icon="inline-start" /> Saving curriculum…</> : "Save as curriculum draft"}</Button></div>
-            {!programs.length && <p className="draft-save__error">Create a program in the curriculum workspace before saving this draft.</p>}
+            {!optionsError && !programs.length && <p className="draft-save__error">Create a program in the curriculum workspace before saving this draft.</p>}
           </form>
         )}
       </section>
       <p className="draft-results__note">
-        Review the generated curriculum carefully. Saving requires an explicit confirmation and creates an editable draft; it does not approve or publish the proposal.
+        {savedCurriculumId
+          ? "This draft was saved automatically as version 1.0 in DRAFT status. Review it in the curriculum workspace; saving does not approve or publish the proposal."
+          : "This draft is not in the database yet. Saving creates an editable draft and does not approve or publish the proposal."}
       </p>
+      <SavedDraftsList refreshKey={savedDraftsRefreshKey} />
     </div>
   );
 }
 
 export default function NewCurriculumDraftPage() {
   const [files, setFiles] = useState<File[]>([]);
+  const [topic, setTopic] = useState("");
+  const [programs, setPrograms] = useState<Program[]>([]);
+  const [courseTypes, setCourseTypes] = useState<CourseType[]>([]);
+  const [optionsLoading, setOptionsLoading] = useState(true);
+  const [optionsError, setOptionsError] = useState("");
+  const [programId, setProgramId] = useState("");
+  const [academicYear, setAcademicYear] = useState("");
+  const [regulation, setRegulation] = useState("");
+  const [title, setTitle] = useState("");
   const [draft, setDraft] = useState<CurriculumDraft | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [draftMetadata, setDraftMetadata] = useState<DraftMetadata | null>(null);
+  const [savedCurriculumId, setSavedCurriculumId] = useState("");
+  const [autoSaveError, setAutoSaveError] = useState("");
+  const [defaultedCredits, setDefaultedCredits] = useState<string[]>([]);
+  const [busyPhase, setBusyPhase] = useState<BusyPhase>("idle");
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const busy = busyPhase !== "idle";
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([api.listPrograms(), api.listCourseTypes()])
+      .then(([programRows, typeRows]) => {
+        if (cancelled) return;
+        setPrograms(programRows);
+        setCourseTypes(typeRows);
+        setOptionsError("");
+      })
+      .catch((caught) => {
+        if (cancelled) return;
+        setOptionsError(
+          caught instanceof ApiError
+            ? caught.message
+            : "Could not load programs and course types.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setOptionsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function acceptFiles(nextFiles: File[]) {
     const validationError = validateFiles(nextFiles);
@@ -687,42 +930,150 @@ export default function NewCurriculumDraftPage() {
 
   function startOver() {
     setDraft(null);
+    setDraftMetadata(null);
+    setSavedCurriculumId("");
+    setAutoSaveError("");
+    setDefaultedCredits([]);
     setFiles([]);
-    setBusy(false);
+    setTopic("");
+    setBusyPhase("idle");
     setError(null);
     if (inputRef.current) inputRef.current.value = "";
   }
 
   async function handleGenerate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const normalizedTopic = topic.trim();
+    if (!normalizedTopic && files.length === 0) {
+      setError("Enter a curriculum topic or add at least one reference document.");
+      return;
+    }
     const validationError = validateFiles(files);
     if (validationError) {
       setError(validationError);
       return;
     }
+    const selectedProgram = programs.find((program) => program.id === programId);
+    if (!selectedProgram) {
+      setError("Choose the program this curriculum belongs to.");
+      return;
+    }
+    const normalizedYear = academicYear.trim();
+    if (!normalizedYear) {
+      setError("Enter the academic year for this curriculum.");
+      return;
+    }
+    const normalizedRegulation = regulation.trim();
+    if (!normalizedRegulation) {
+      setError("Enter the regulation for this curriculum.");
+      return;
+    }
+    if (!courseTypes.length) {
+      setError("No active course types are configured, so generated courses cannot be saved.");
+      return;
+    }
 
-    setBusy(true);
+    setBusyPhase("generating");
     setError(null);
     try {
-      const result = await api.generateCurriculumDraft(files);
-      setDraft(result);
+      let generated: CurriculumDraft;
+      try {
+        generated = await api.generateCurriculumDraft(files, normalizedTopic);
+      } catch (caught) {
+        setError(
+          caught instanceof ApiError
+            ? caught.message
+            : "The curriculum service could not be reached. Check the backend and try again.",
+        );
+        return;
+      }
+
+      const normalized = applyDefaultCredits(generated);
+      const categories = draftCategories(normalized.draft);
+      const typeCodes = courseTypeDefaults(normalized.draft, courseTypes);
+      const unresolved = categories.filter((category) => !typeCodes[category]);
+      const metadata: DraftMetadata = {
+        program_id: selectedProgram.id,
+        academic_year: normalizedYear,
+        regulation: normalizedRegulation,
+        title: title.trim(),
+      };
+      let savedId = "";
+      let saveFailure = "";
+      if (unresolved.length > 0) {
+        saveFailure = `The draft was generated but not saved automatically because no course type matches: ${unresolved.join(", ")}. Choose a course type below and save manually.`;
+      } else {
+        setBusyPhase("saving");
+        try {
+          const saved = await api.saveCurriculumDraft({
+            ...metadata,
+            title: metadata.title || null,
+            course_type_codes: typeCodes,
+            credits_by_course_code: {},
+            draft: normalized.draft,
+          });
+          savedId = saved.id;
+        } catch (caught) {
+          if (caught instanceof ApiError && caught.code === "curriculum_exists") {
+            saveFailure = "The draft was generated but not saved automatically: a curriculum already exists for this program and regulation. Choose a different regulation below, or open the existing draft from the saved list.";
+          } else {
+            const detail = caught instanceof ApiError
+              ? caught.message
+              : "the curriculum service could not be reached.";
+            saveFailure = `The draft was generated but not saved automatically: ${detail}`;
+          }
+        }
+      }
+
+      setDraft(normalized.draft);
+      setDraftMetadata(metadata);
+      setSavedCurriculumId(savedId);
+      setAutoSaveError(saveFailure);
+      setDefaultedCredits(normalized.defaulted);
     } catch (caught) {
       setError(
         caught instanceof ApiError
           ? caught.message
-          : "The curriculum service could not be reached. Check the backend and try again.",
+          : "The curriculum draft could not be completed. Try again.",
       );
     } finally {
-      setBusy(false);
+      setBusyPhase("idle");
     }
   }
 
-  if (draft) {
+  if (draft && draftMetadata) {
     return (
       <div className="draft-studio">
-        <DraftResults draft={draft} onStartOver={startOver} />
+        <DraftResults
+          draft={draft}
+          metadata={draftMetadata}
+          initialSavedCurriculumId={savedCurriculumId}
+          initialSaveError={autoSaveError}
+          defaultedCredits={defaultedCredits}
+          onStartOver={startOver}
+        />
       </div>
     );
+  }
+
+  const hasTopic = Boolean(topic.trim());
+  const missingSource = !hasTopic && files.length === 0;
+  const canSubmit = !busy
+    && !missingSource
+    && !optionsLoading
+    && !optionsError
+    && programs.length > 0
+    && courseTypes.length > 0;
+  let progressTitle = "Designing your curriculum";
+  let progressDetail =
+    "Turning your topic brief into a semester roadmap, course outcomes, and proposed mappings.";
+  if (busyPhase === "saving") {
+    progressTitle = "Saving your curriculum draft";
+    progressDetail = `Creating curriculum version 1.0 for ${academicYear.trim() || "the selected year"} · ${regulation.trim() || "the selected regulation"} in DRAFT status.`;
+  } else if (files.length > 0) {
+    progressTitle = hasTopic ? "Reading your documents and brief" : "Reading your documents";
+    progressDetail =
+      "Extracting the source material and building the curriculum roadmap with its outcomes and mappings.";
   }
 
   return (
@@ -737,10 +1088,11 @@ export default function NewCurriculumDraftPage() {
 
       <header className="draft-studio__intro">
         <p className="draft-eyebrow"><Sparkles aria-hidden="true" /> Curriculum design</p>
-        <h1>Build a curriculum from your source documents.</h1>
+        <h1>Build a curriculum from a topic or your documents.</h1>
         <p>
-          Generate a semester-by-semester roadmap, course outcomes, and proposed program mappings
-          for your committee to review.
+          Describe what the program should cover, add reference documents if you have them, and
+          generate a semester-by-semester roadmap, outcomes, and proposed mappings. The result is
+          saved to the curriculum workspace automatically as an unapproved draft.
         </p>
       </header>
 
@@ -749,15 +1101,150 @@ export default function NewCurriculumDraftPage() {
           <header className="draft-section-heading">
             <span>01</span>
             <div>
-              <h2>Source documents</h2>
-              <p>Add the syllabi, regulations, or curriculum outlines for this program.</p>
+              <h2>Shape the curriculum</h2>
+              <p>Set where the draft belongs, then start with a topic, source documents, or both.</p>
             </div>
           </header>
 
           <form onSubmit={handleGenerate}>
             <FieldGroup>
+              <div className="draft-source-divider">
+                <span>Curriculum details</span>
+              </div>
+
+              <div className="draft-metadata-grid">
+                <Field className="draft-metadata-wide" data-invalid={Boolean(error) && !programId}>
+                  <FieldLabel htmlFor="draft-program">Program</FieldLabel>
+                  <select
+                    id="draft-program"
+                    className="draft-metadata-control"
+                    value={programId}
+                    onChange={(event) => {
+                      setProgramId(event.target.value);
+                      if (error) setError(null);
+                    }}
+                    disabled={busy || optionsLoading}
+                    aria-invalid={Boolean(error) && !programId}
+                    required
+                  >
+                    <option value="" disabled>
+                      {optionsLoading ? "Loading programs…" : "Select an existing program"}
+                    </option>
+                    {programs.map((program) => (
+                      <option key={program.id} value={program.id}>
+                        {program.code} · {program.name}
+                      </option>
+                    ))}
+                  </select>
+                  <FieldDescription>
+                    The saved curriculum is created for this program.
+                  </FieldDescription>
+                </Field>
+
+                <Field data-invalid={Boolean(error) && !academicYear.trim()}>
+                  <FieldLabel htmlFor="draft-academic-year">Academic year</FieldLabel>
+                  <input
+                    id="draft-academic-year"
+                    className="draft-metadata-control"
+                    value={academicYear}
+                    onChange={(event) => {
+                      setAcademicYear(event.target.value);
+                      if (error) setError(null);
+                    }}
+                    placeholder="2026–2027"
+                    disabled={busy}
+                    aria-invalid={Boolean(error) && !academicYear.trim()}
+                    required
+                  />
+                </Field>
+
+                <Field data-invalid={Boolean(error) && !regulation.trim()}>
+                  <FieldLabel htmlFor="draft-regulation">Regulation</FieldLabel>
+                  <input
+                    id="draft-regulation"
+                    className="draft-metadata-control"
+                    value={regulation}
+                    onChange={(event) => {
+                      setRegulation(event.target.value);
+                      if (error) setError(null);
+                    }}
+                    placeholder="R2026"
+                    disabled={busy}
+                    aria-invalid={Boolean(error) && !regulation.trim()}
+                    required
+                  />
+                </Field>
+
+                <Field className="draft-metadata-wide">
+                  <FieldLabel htmlFor="draft-title">Curriculum title (optional)</FieldLabel>
+                  <input
+                    id="draft-title"
+                    className="draft-metadata-control"
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    placeholder="Uses the generated program name if left blank"
+                    disabled={busy}
+                  />
+                </Field>
+              </div>
+
+              {optionsLoading ? (
+                <p className="draft-options-status">
+                  <Spinner />
+                  Loading programs and course types…
+                </p>
+              ) : null}
+              {optionsError ? (
+                <p className="draft-options-error" role="alert">{optionsError}</p>
+              ) : null}
+              {!optionsLoading && !optionsError && !programs.length ? (
+                <p className="draft-options-error" role="alert">
+                  No programs are configured. <Link href="/curricula">Create a program in the curriculum workspace</Link> before generating a draft.
+                </p>
+              ) : null}
+              {!optionsLoading && !optionsError && programs.length > 0 && !courseTypes.length ? (
+                <p className="draft-options-error" role="alert">
+                  No active course types are configured. Ask an administrator to add them before generating a draft.
+                </p>
+              ) : null}
+
+              <div className="draft-source-divider">
+                <span>Curriculum brief</span>
+              </div>
+
+              <Field data-invalid={Boolean(error) && missingSource}>
+                <FieldLabel htmlFor="draft-topic">Curriculum topic or brief</FieldLabel>
+                <textarea
+                  id="draft-topic"
+                  className="draft-topic-input"
+                  rows={4}
+                  maxLength={500}
+                  value={topic}
+                  onChange={(event) => {
+                    setTopic(event.target.value);
+                    if (error) setError(null);
+                  }}
+                  placeholder="e.g. B.Tech in Artificial Intelligence, 4 years, 8 semesters, with applied projects and industry exposure."
+                  disabled={busy}
+                  aria-invalid={Boolean(error) && missingSource}
+                  aria-describedby="draft-topic-help"
+                />
+                <div className="draft-topic-meta">
+                  <FieldDescription id="draft-topic-help">
+                    Use this, the documents below, or both. Describe the program, degree, duration,
+                    or focus; the LLM proposes the roadmap, course outcomes, PEOs, POs, and
+                    mappings.
+                  </FieldDescription>
+                  <span aria-hidden="true">{topic.length}/500</span>
+                </div>
+              </Field>
+
+              <div className="draft-source-divider">
+                <span>Reference documents (optional)</span>
+              </div>
+
               <Field data-invalid={Boolean(error)}>
-                <FieldLabel htmlFor="draft-source-files">Choose curriculum files</FieldLabel>
+                <FieldLabel htmlFor="draft-source-files">Add curriculum files</FieldLabel>
                 <div
                   className={`draft-dropzone${dragging ? " is-dragging" : ""}`}
                   onDragOver={(event) => {
@@ -796,7 +1283,8 @@ export default function NewCurriculumDraftPage() {
                   </Button>
                 </div>
                 <FieldDescription id="draft-file-help">
-                  PDF, DOCX, TXT, MD, or CSV · up to {MAX_FILES} files · {MAX_FILE_MB} MB per file
+                  PDF, DOCX, TXT, MD, or CSV · up to {MAX_FILES} files · {MAX_FILE_MB} MB per file.
+                  Add files when you want the draft grounded in existing curriculum material.
                 </FieldDescription>
               </Field>
             </FieldGroup>
@@ -833,24 +1321,29 @@ export default function NewCurriculumDraftPage() {
               <div className="draft-progress" role="status" aria-live="polite">
                 <Spinner />
                 <div>
-                  <strong>Reading your documents</strong>
-                  <p>Building the curriculum roadmap and mapping course outcomes. Longer programs can take a little time.</p>
+                  <strong>{progressTitle}</strong>
+                  <p>
+                    {progressDetail} Longer programs can take a little time.
+                  </p>
                 </div>
               </div>
             ) : null}
 
             <div className="draft-submit-row">
-              <p>The result is a preview and is not saved. Download the JSON to keep a copy.</p>
-              <Button type="submit" size="lg" disabled={busy || files.length === 0 || Boolean(error)}>
+              <p>
+                Generating saves version 1.0 automatically in DRAFT status. Missing credits default
+                to {DEFAULT_DRAFT_CREDITS}. Nothing is approved or published.
+              </p>
+              <Button type="submit" size="lg" disabled={!canSubmit}>
                 {busy ? (
                   <>
                     <Spinner data-icon="inline-start" />
-                    Generating draft
+                    {busyPhase === "saving" ? "Saving draft" : "Generating draft"}
                   </>
                 ) : (
                   <>
                     <Sparkles data-icon="inline-start" />
-                    Generate curriculum draft
+                    Generate and save draft
                   </>
                 )}
               </Button>
@@ -859,10 +1352,11 @@ export default function NewCurriculumDraftPage() {
         </section>
 
         <aside className="draft-guide">
-          <div className="draft-guide__label">THE REVIEW</div>
-          <h2>One draft, ready for academic review.</h2>
+          <div className="draft-guide__label">THE WORKFLOW</div>
+          <h2>One draft, saved and ready for academic review.</h2>
           <p className="draft-guide__intro">
-            The generated plan stays a proposal. Your committee decides what belongs in the curriculum.
+            Generation writes the plan to the curriculum workspace as an unapproved draft. Your
+            committee decides what belongs in the curriculum.
           </p>
           <ol className="draft-guide__steps">
             <li>
@@ -877,13 +1371,19 @@ export default function NewCurriculumDraftPage() {
               <span>03</span>
               <div><strong>Outcome mapping</strong><p>Proposed PEOs, POs, and CO–PO levels.</p></div>
             </li>
+            <li>
+              <span>04</span>
+              <div><strong>Saved as a draft</strong><p>Version 1.0 is stored in DRAFT status for review.</p></div>
+            </li>
           </ol>
           <div className="draft-guide__foot">
             <GraduationCap aria-hidden="true" />
-            <p>Review the source-derived content before using or sharing the draft.</p>
+            <p>Nothing is approved or published automatically. Review the saved draft in the curriculum workspace.</p>
           </div>
         </aside>
       </div>
+
+      <SavedDraftsList />
     </div>
   );
 }

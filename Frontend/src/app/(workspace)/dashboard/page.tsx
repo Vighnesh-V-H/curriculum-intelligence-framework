@@ -93,8 +93,9 @@ export default function DashboardPage() {
           </div>
           <h2 id="dashboard-draft-title">Turn source material into a curriculum draft.</h2>
           <p>
-            Bring your program documents together, then review a generated semester roadmap,
-            course outcomes, and proposed mappings in one place.
+            Bring your program documents together, then generate and review a semester roadmap,
+            course outcomes, and proposed mappings. Each draft is saved to the curriculum workspace
+            automatically.
           </p>
           {canDraft ? (
             <Link className="dashboard-draft-entry__action" href="/curriculum-drafts/new">
@@ -104,7 +105,7 @@ export default function DashboardPage() {
           ) : (
             <p className="dashboard-draft-entry__access-note">Your role does not include curriculum draft generation.</p>
           )}
-          <span className="dashboard-draft-entry__note">AI-generated preview · not saved</span>
+          <span className="dashboard-draft-entry__note">AI-generated draft · saved in DRAFT status</span>
         </div>
         <ol className="dashboard-workflow" aria-label="Draft workflow">
           <li>

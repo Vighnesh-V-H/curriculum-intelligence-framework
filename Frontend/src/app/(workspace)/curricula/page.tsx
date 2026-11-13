@@ -74,7 +74,11 @@ export default function CurriculaPage() {
         setCourseTypes(types);
         setCurricula(rows);
         setLevels(mapLevels);
-        setSelectedId(rows[0]?.id ?? "");
+        const requestedId = new URLSearchParams(window.location.search).get("curriculum");
+        const initialId = requestedId && rows.some((row) => row.id === requestedId)
+          ? requestedId
+          : rows[0]?.id ?? "";
+        setSelectedId(initialId);
       })
       .catch((caught) => { if (!cancelled) setError(message(caught)); });
     return () => { cancelled = true; };
