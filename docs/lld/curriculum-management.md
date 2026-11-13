@@ -29,8 +29,8 @@ All endpoints require a JWT bearer token.
 | Method | Path | Description |
 | --- | --- | --- |
 | `POST` | `/api/v1/curricula` | Create a curriculum with initial draft version `1.0` |
-| `POST` | `/api/v1/curriculum-drafts` | Generate an AI draft from 1-5 uploaded documents (preview only) |
-| `POST` | `/api/v1/curriculum-drafts/save` | Explicitly save a reviewed draft as a normalized curriculum and initial draft version |
+| `POST` | `/api/v1/curriculum-drafts` | Generate a validated AI draft from a topic brief and/or 1-5 uploaded documents |
+| `POST` | `/api/v1/curriculum-drafts/save` | Persist a generated or reviewed draft as a normalized curriculum and initial draft version; used automatically by the draft studio with a manual fallback |
 | `GET` | `/api/v1/curricula` | List curricula with latest version summary |
 | `GET` | `/api/v1/curricula/{curriculum_id}` | Get curriculum with all versions |
 | `PATCH` | `/api/v1/curricula/{curriculum_id}` | Update curriculum metadata |
@@ -96,44 +96,83 @@ how many course outcomes and CO–PO mappings the course has, and sends
 `force=true` only when the operator explicitly confirms a removal that has
 prerequisite dependents.
 
-## AI-assisted Curriculum Draft Preview
+## AI-assisted Curriculum Draft Generation
 
 `POST /api/v1/curriculum-drafts` is available to `ADMIN`,
-`COMMITTEE_MEMBER`, and `FACULTY` users. The multipart request accepts
-1-5 files from the configured document allow-list. The service extracts
-text, limits the combined prompt to 120,000 characters, and requests a
-roadmap-style draft from the configured LLM. Draft completions allow up to
-16,384 output tokens by default and use 32,768 for Gemini 2.5 models, avoiding
-truncation of larger semester, outcome, and mapping data.
+`COMMITTEE_MEMBER`, and `FACULTY` users. The multipart request accepts a
+`topic` brief of 3-500 characters, 1-5 files from the configured document
+allow-list, or both. At least one source is required; otherwise the request is
+rejected with `400 missing_draft_source`. A topic outside the allowed length is
+rejected with `400 invalid_topic`.
 
-Generation returns an advisory preview and does not persist it. A separate
-explicit save action accepts the reviewed draft, selected program, academic
-year, regulation, title, and a mapping from generated course categories to
-active course types. Saving creates the curriculum, version `1.0` (`DRAFT`),
-semesters, courses, course outcomes, PEO/PO versions (`DRAFT`), version pins,
-and CO–PO mappings with draft mapping versions in one database transaction.
-The operation never approves or publishes generated content. Existing
-program-level PEO/PO codes reuse an exactly matching outcome version; changed
-statements create a new draft outcome version. Invalid mappings or database
-conflicts reject the whole save without leaving partial records. Courses whose
-credit count is absent from the generated payload require a user-provided value. The returned draft is advisory; if uploaded material
-omits PEOs or POs, the LLM proposes baseline suggestions for human review, not
-claims about the source. Every course outcome must have at least one valid
-CO–PO mapping. Invalid or incomplete LLM output is reported as
-`503 llm_draft_failed` rather than as a client request error.
+With documents, the service extracts text, prepends a `= Curriculum brief =`
+section when a topic is present, limits the combined prompt to 120,000
+characters, and requests a roadmap-style draft from the configured LLM. The
+brief takes precedence over conflicting document details. With a topic only,
+the service sends the brief to a topic-design prompt that proposes a complete,
+realistic program without pretending a source document exists. Draft
+completions allow up to 16,384 output tokens by default and use 32,768 for
+Gemini models, avoiding truncation of larger semester, outcome, and mapping
+data.
 
-## Draft preview editing
+Generation returns a validated advisory draft; the generation endpoint itself
+does not persist it. The draft studio collects the destination program,
+academic year, regulation, and optional title before generation. Immediately
+after a successful generation it maps generated course categories to active
+course types, applies three credits to any course whose generated credit value
+is missing or outside the accepted `0 < credits <= 30` range, and submits the
+draft to `POST /api/v1/curriculum-drafts/save` automatically. Saving creates
+the curriculum, version `1.0` (`DRAFT`), semesters, courses, course outcomes,
+PEO/PO versions (`DRAFT`), version pins, and CO–PO mappings with draft mapping
+versions in one database transaction. The operation never approves or publishes
+generated content. Existing program-level PEO/PO codes reuse an exactly matching
+outcome version; changed statements create a new draft outcome version. Invalid
+mappings or database conflicts reject the whole save without leaving partial
+records.
 
-The `/curriculum-drafts/new` preview includes an explicit edit mode before
-save. It supports edits to semester name/focus, course title/category/credits/
+If the automatic save fails, for example because the program already has a
+curriculum with that regulation or no course type matches a generated
+category, the generated preview remains available and the studio shows a
+manual save form prefilled with the same metadata and defaults. The manual
+fallback uses the same explicit endpoint and remains transactional. The
+returned draft is advisory; if uploaded material omits PEOs or POs, the LLM
+proposes baseline suggestions for human review, not claims about the source.
+Every course outcome must have at least one valid CO–PO mapping. If the first
+response fails consistency validation, the service sends the validator error
+and the rejected draft back to the LLM once for a complete corrected response.
+A draft that is still invalid after that repair attempt is reported as
+`503 llm_draft_failed`; provider transport failures are not repaired. Transient
+provider statuses, including 503 overload responses, are retried up to five
+times with bounded exponential backoff and jitter before that error is returned.
+
+## Draft studio and saved drafts
+
+The `/curriculum-drafts/new` draft studio collects program, academic year,
+regulation, optional title, a topic brief, reference documents, or a
+combination of brief and documents. The topic field is capped at 500
+characters; generation is enabled only when a topic or at least one file is
+present and the destination metadata and course-type configuration are
+available. A failed generation can be retried with the same inputs. After
+generation the draft is saved automatically as version `1.0` in `DRAFT` status;
+the results view reports whether the save succeeded and links to the curriculum
+workspace.
+
+If automatic saving fails, the results view keeps the generated content and
+shows an explicit save form prefilled with the original metadata. The preview
+also supports edits to semester name/focus, course title/category/credits/
 summary, course-outcome statements, PEO/PO statements, and CO–PO mapping
-strengths. Course and outcome codes remain fixed to protect mapping references.
-Changing course categories requires selecting a course type for the new
-category. Removing the last mapping for any course outcome blocks save; the
-backend performs full schema/consistency validation and remains authoritative.
-The edited preview is submitted through the existing explicit save endpoint,
-which still persists all records transactionally as draft and never approves
-or publishes generated content.
+strengths before the manual save. Course and outcome codes remain fixed to
+protect mapping references. Changing course categories requires selecting a
+course type for the new category. Removing the last mapping for any course
+outcome blocks save; the backend performs full schema/consistency validation
+and remains authoritative.
+
+Below the studio, a saved-drafts list reads `GET /api/v1/curricula`, filters
+curricula whose latest version is `DRAFT`, and displays the program, title,
+academic year, regulation, version label, and last update. Each row links to
+the curriculum workspace with the curriculum selected. The list is a read-only
+projection of the curriculum API; the curriculum workspace remains the place
+to review and edit saved drafts.
 
 ## Frontend test workspace
 
@@ -144,7 +183,9 @@ outcomes, creating/reviewing program outcomes and CO–PO mappings, proposing an
 reviewing prerequisites, changing version status, and comparing versions.
 Actions are shown according to the current user's role and draft state; the API
 remains authoritative for authorization and transition validation. AI-generated
-draft output remains a preview and is not saved by this page.
+draft output is saved automatically from the draft studio as a `DRAFT`
+curriculum version and is reviewed and edited in this workspace; generation
+never approves or publishes content.
 
 Departments and programs are managed through an academic setup panel that is
 available to administrators and committee members at all times, rather than

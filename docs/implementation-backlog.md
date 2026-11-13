@@ -13,7 +13,9 @@ This file tracks work still needed to complete the Curriculum Intelligence and V
 ### 2. Curriculum verification
 - [x] Add deterministic course/semester structure checks, CO–PO coverage checks, semester credit summaries, and prerequisite analysis in one version-scoped run (FR-12/FR-14).
 - [x] Persist findings with evidence, confidence, severity, recommendations, and traceable references; require human review and never automatically modify curricula.
-- [ ] Add topic overlap/progression, skills/competency, configurable balance thresholds, and OBE/accreditation/industry comparisons after their reference data and rules are specified.
+- [x] Add topic overlap/progression detection, prerequisite-chain statistics, transitive-edge analysis, and configurable institutional balance checks.
+- [x] Add governed OBE, accreditation, industry, and institutional reference comparison with validated rules, program-level precedence, and no implicit defaults.
+- [x] Add input fingerprinting and stale-run detection so repeated verification is reliable after curriculum data changes.
 
 ### 3. Finding review and reports
 - [x] Add authorized API operations to record finding review decisions and comments (accept, reject, or modify).
@@ -21,8 +23,8 @@ This file tracks work still needed to complete the Curriculum Intelligence and V
 - [x] Provide report API responses grouped by category, severity, or review status, with filtered counts.
 
 ### 4. Document-to-curriculum workflow
-- [x] Complete the workflow from uploaded document and extracted content to a validated, editable curriculum draft.
-- [x] Add an explicit save action that persists the preview as curriculum/version 1.0 with courses, outcomes, PEOs, POs, and draft mappings.
+- [x] Complete the workflow from a topic brief and/or uploaded documents to a validated, editable curriculum draft.
+- [x] Save a generated draft automatically as curriculum/version 1.0 with courses, outcomes, PEOs, POs, and draft mappings, using an explicit save form as a fallback when automatic persistence fails.
 - [x] Add in-place editing of semester/course/CO/PEO/PO content and CO–PO mapping strength before save; backend validation remains authoritative.
 - [x] Define handling for unsupported or scanned documents; OCR is intentionally unsupported and files without extractable text fail with a clear error.
 - [x] Ensure ingestion and draft-generation failures are traceable and can be retried safely.
@@ -50,14 +52,19 @@ This file tracks work still needed to complete the Curriculum Intelligence and V
 - [x] Display findings with category, severity, confidence, evidence, related curriculum entities, and recommendations.
 - [x] Add authorized finding review actions and show the current review status/comment.
 - [x] Provide a readable report view with filtering and grouping.
+- [x] Show prerequisite-chain, structure/credit, topic-overlap, outcome, and reference-comparison analysis summaries.
+- [x] Show stale-run state with a rerun action after curriculum data changes.
+- [x] Add an interactive severity-aware curriculum map with topic-overlap overlays and an accessible table alternative.
+- [x] Add governed reference management for institutional, OBE, accreditation, and industry rules.
 
 ### 4. Curriculum exploration
 - [x] Add an interactive curriculum/dependency visualization and course details view using the relational curriculum contract.
 - [x] Provide accessible alternatives to visual-only information, including lists or tables.
+- [x] Add a Neo4j-backed knowledge graph tab with label filters, search, one-hop selection details, projection freshness, rebuild/refresh actions, setup guidance, and accessible node/relationship tables.
 
 ### 5. Document and draft workflow
 - [x] Complete the UI for uploading documents, tracking processing status, viewing extracted/analysis results, and handling failures.
-- [x] Add a draft review/edit screen and an explicit save-to-curriculum flow; generated drafts must not be treated as saved curricula until confirmed.
+- [x] Add a draft review/edit screen with automatic save-to-curriculum after generation, a prefilled manual save fallback, and a list of all saved draft curricula.
 
 ### 6. Administration and academic setup
 - [x] Add an admin-only user management page for account creation, role assignment, and active/inactive/locked status changes.
@@ -72,11 +79,14 @@ This file tracks work still needed to complete the Curriculum Intelligence and V
 
 ## Blocked or deferred
 
-- Extended FR-14 verification (topic overlap/progression, skills/competency, configurable balance thresholds, and OBE/accreditation/industry comparisons) is deferred until institutional rules and governed reference datasets are defined.
+- Evaluation datasets for topic similarity, extraction quality, and false-positive
+  measurement require domain-owned labelled data.
+- Embedding-based or semantic topic/skill matching is deferred; current checks
+  are deterministic and lexical.
 - Extraction-quality and analysis-accuracy evaluation requires labelled datasets reviewed by domain experts.
 - OCR for scanned documents is explicitly out of scope; such files fail with a clear "no extractable text" error.
 - Browser-level end-to-end tests and production deployment remain separate follow-up work.
 
 ## Current baseline
 
-The repository already has authentication, relational curriculum/version management, course outcomes, Program Outcome/PEO and CO-PO management, prerequisite management and prerequisite verification, document upload/LLM processing, and AI-assisted curriculum draft generation. The frontend covers authentication, admin-only user administration, documents with processing status and retry, draft generation and review, verification review with grouped reports, and a curriculum workspace with metadata/CO/PO/PEO/mapping editing, structure summaries, accessible dependency exploration, always-available academic setup, full version comparison across courses/prerequisites/outcomes/mappings, and confirmed course removal with dependency notification. Backend tests cover curriculum editing, mapping lifecycle rules, prerequisite removal, document retry, version comparison dimensions, and the document-to-draft-to-saved-curriculum-to-verification-report flow. This backlog lists remaining work.
+The repository already has authentication, relational curriculum/version management, course outcomes, Program Outcome/PEO and CO-PO management, prerequisite management and prerequisite verification, governed verification references, document upload/LLM processing, and AI-assisted curriculum draft generation. The frontend covers authentication, admin-only user administration, documents with processing status and retry, draft generation and review, verification review with grouped reports, analysis cards, stale-run reruns, reference management, and a severity-aware interactive verification map with an accessible table, plus a curriculum workspace with metadata/CO/PO/PEO/mapping editing, structure summaries, accessible dependency exploration, a Neo4j-backed knowledge graph explorer with projection freshness and rebuild controls, always-available academic setup, full version comparison across courses/prerequisites/outcomes/mappings, and confirmed course removal with dependency notification. Backend tests cover curriculum editing, mapping lifecycle rules, prerequisite removal, verification analysis and reference precedence/staleness, document retry, version comparison dimensions, graph projection/read behavior, and the document-to-draft-to-saved-curriculum-to-verification-report flow. This backlog lists remaining work.

@@ -194,6 +194,9 @@ Signature checks for binary formats before persisting:
   JSON object (Fenced code blocks are stripped before parsing).
   `response_format` is not sent so Ollama/vLLM-style compatible
   servers keep working.
+- Transient provider responses (408, 429, 500, 502, 503, 504 and
+  529) are retried up to five times with exponential backoff,
+  jitter, and `Retry-After` when the provider sends it.
 - `get_llm_client()` settings factory, injected via
   `get_llm_client` dependency so tests can substitute stubs.
 

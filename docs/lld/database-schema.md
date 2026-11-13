@@ -55,6 +55,7 @@ erDiagram
     curriculum_versions ||--o{ verification_runs : "verified by"
     verification_runs ||--o{ verification_findings : "produces"
     verification_findings ||--o{ verification_finding_references : "references"
+    programs ||--o{ verification_references : "governs (optional)"
     users ||--o{ user_roles : "assigned"
     roles ||--o{ user_roles : "grants"
 ```
@@ -439,7 +440,7 @@ Corequisite management is referenced by FR-07 (dependency check) but
 no functional requirement defines it yet; it is listed as a future
 extension (section 8).
 
-### 4.8 Verification and Findings (NFR-01, FR-12)
+### 4.8 Verification and Findings (FR-12, FR-14, NFR-01)
 
 #### `verification_runs`
 
@@ -454,11 +455,13 @@ Asynchronous AI verification job (NFR-01).
 | `requested_at` | TIMESTAMPTZ | not null, default `now()` |
 | `started_at`, `completed_at` | TIMESTAMPTZ | nullable |
 | `error_message` | TEXT | nullable |
-| `summary` | JSONB | aggregate counts, engine metadata |
+| `summary` | JSONB | aggregate counts, analyzer statistics, `input_fingerprint` |
 
 The API acknowledges the request immediately and returns the run
 identifier; clients poll the run status until `COMPLETED` or
-`FAILED` (NFR-01 acceptance criteria).
+`FAILED` (NFR-01 acceptance criteria). A completed summary stores the
+SHA-256 fingerprint of the verification inputs so the API can report
+`is_stale` when the curriculum data later changes.
 
 #### `verification_findings`
 
@@ -493,13 +496,48 @@ mappings, ...) for the verification report.
 | --- | --- | --- |
 | `id` | UUID PK | |
 | `finding_id` | UUID FK → `verification_findings` | cascade delete |
-| `entity_type` | VARCHAR(50) | `CURRICULUM_VERSION`, `SEMESTER`, `COURSE`, `COURSE_OUTCOME`, `PROGRAM_OUTCOME`, `PEO`, `CO_PO_MAPPING`, `PREREQUISITE` |
+| `entity_type` | VARCHAR(50) | `CURRICULUM_VERSION`, `SEMESTER`, `COURSE`, `COURSE_OUTCOME`, `PROGRAM_OUTCOME`, `PEO`, `CO_PO_MAPPING`, `PREREQUISITE`, `VERIFICATION_REFERENCE` |
 | `entity_id` | UUID | not null |
 | `note` | VARCHAR(500) | nullable |
 
 A polymorphic reference is used because a finding may point at
 several different entity types; each type is validated in the
 service layer.
+
+#### `verification_references`
+
+Governed institutional, OBE, accreditation, and industry rules used by
+FR-14 reference comparison. References are configuration, not curriculum
+content; verification never modifies them.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | UUID PK | |
+| `program_id` | UUID FK → `programs` | nullable; `NULL` means institution-wide |
+| `reference_type` | VARCHAR(30) | `OBE`, `ACCREDITATION`, `INDUSTRY`, `INSTITUTIONAL` |
+| `code` | VARCHAR(50) | stable reference code, normalized upper-case |
+| `title` | VARCHAR(200) | human-readable name |
+| `source` | VARCHAR(300) | provenance (body, standard, or dataset) |
+| `version_label` | VARCHAR(50) | reference version, default `1.0` |
+| `effective_date` | DATE | nullable |
+| `severity` | VARCHAR(20) | severity assigned to findings from this reference |
+| `status` | VARCHAR(20) | `ACTIVE`, `INACTIVE` |
+| `rules` | JSONB | type-specific validated rules |
+| `created_by` | UUID FK → `users` | not null |
+| `created_at`, `updated_at` | TIMESTAMPTZ | not null |
+
+Constraints and indexes:
+
+- `uq_verification_references_scope (program_id, reference_type, code,
+  version_label)` prevents duplicate scoped versions.
+- `idx_verification_references_program (program_id, reference_type, status)`
+  supports applicable-reference lookup.
+
+A program-specific reference with the same `reference_type` and `code`
+overrides the institution-wide reference. Rules are validated by
+`app/schemas/verification_reference.py`; unknown fields are rejected.
+References are removed by setting `status = 'INACTIVE'`, preserving the
+findings that cite them through `verification_finding_references`.
 
 Prerequisite verification (FR-12) is executed as a verification run
 scoped to the selected curriculum version. Its findings use category
@@ -574,8 +612,9 @@ LLM analysis results. Detailed design lives in
 | FR-10 CO-PO Mapping | `co_po_mappings`, `co_po_mapping_versions`, `mapping_levels`, `curriculum_version_program_outcomes`, `audit_logs` |
 | FR-11 Prerequisite Management | `course_prerequisites`, `courses`, `audit_logs` |
 | FR-12 Prerequisite Verification | `verification_runs`, `verification_findings`, `verification_finding_references`, `course_prerequisites`, `courses`, `audit_logs` |
+| FR-14 Curriculum Verification | `verification_runs`, `verification_findings`, `verification_finding_references`, `verification_references`, `curricula`, `curriculum_versions`, `semesters`, `courses`, `course_outcomes`, `program_outcomes`, `co_po_mappings`, `audit_logs` |
 | FR-13 Document Processing | `documents`, `audit_logs` |
-| NFR-01 Performance (async verification) | `verification_runs`, `verification_findings`, `verification_finding_references` |
+| NFR-01 Performance (async verification) | `verification_runs`, `verification_findings`, `verification_finding_references`, `verification_references` |
 
 ## 6. Design Decisions and Assumptions
 
@@ -652,9 +691,13 @@ roadmap but have no functional requirement yet. They are intentionally
 **not** part of migration `V1` and will be added with their
 requirements:
 
-- Topics and topic overlap analysis (`Topic`, `Course COVERS Topic`)
-- Skills and industry competencies
-- Accreditation requirements / OBE reference data
+- Topics and topic overlap analysis as first-class graph entities (`Topic`,
+  `Course COVERS Topic`); current verification uses deterministic lexical
+  evidence only
+- A skills and industry-competency catalogue; current industry checks use
+  keyword rules configured in `verification_references`
+- Bulk accreditation/OBE criterion datasets; current comparisons use configured
+  `verification_references` rules
 - Corequisite relationships (referenced by FR-07, not yet defined)
 - PO → PEO support mapping (`Program Outcome SUPPORTS PEO`)
 - Refresh tokens / session management for FR-01
@@ -670,6 +713,9 @@ design.
 | `alembic/versions/0001_initial_schema.py` | Executes `alembic/sql/001_initial_schema.sql`: tables, constraints, indexes, triggers |
 | `alembic/versions/0002_seed_reference_data.py` | Executes `alembic/sql/002_seed_reference_data.sql`: roles, course types, mapping levels |
 | `alembic/versions/0003_document_ingestion.py` | Executes `alembic/sql/003_document_ingestion.sql`: `documents` table (FR-13) |
+| `alembic/versions/0004_curriculum_draft_details.py` | Draft metadata and generated-curriculum detail fields |
+| `alembic/versions/0005_graph_projection_jobs.py` | Durable Neo4j projection jobs and freshness metadata |
+| `alembic/versions/0006_verification_references.py` | `verification_references` table for governed FR-14 rules |
 
 Apply from the `backend/` directory:
 

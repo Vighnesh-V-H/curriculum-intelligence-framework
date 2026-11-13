@@ -151,6 +151,26 @@ completed rebuild can race with an in-flight relational transaction, but that
 transaction's committed outbox job will keep the projection marked stale and
 be processed by the worker.
 
+## Frontend integration
+
+The curriculum workspace exposes a **Knowledge graph** tab for the selected
+curriculum version. It calls the authenticated graph GET operation when the tab
+or version changes and renders the returned `nodes` and `relationships` without
+transforming the source contract.
+
+- The view is labeled with `projection_status` and `is_current`; a non-current
+  snapshot is shown as stale rather than presented as authoritative.
+- Nodes are grouped by label and can be filtered by label, searched, selected
+  for one-hop relationship inspection, and opened in an accessible node and
+  relationship table.
+- Curriculum writers can trigger the rebuild endpoint and refresh the snapshot.
+  Readers can refresh but cannot rebuild.
+- A `503 graph_unavailable` response is rendered as explicit Neo4j setup
+  guidance; the relational curriculum remains usable.
+- Neo4j is optional at runtime. The frontend never uses the knowledge graph as
+  the source of truth for curriculum edits, authorization, verification, or
+  reports.
+
 ## Query contract (initial)
 
 The read-only graph API is version-scoped, supporting:

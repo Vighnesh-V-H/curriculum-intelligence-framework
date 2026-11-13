@@ -65,7 +65,7 @@ The proposed system aims to:
 
 ## Proposed Solution
 
-The framework combines deterministic rules, graph analysis, NLP, semantic similarity, and LLM-assisted reasoning. The LLM is used as an interpretation and explanation layer, not as the sole source of verification.
+The framework combines deterministic rules, graph analysis, lexical text comparison, and governed reference data. LLM assistance is used to extract and draft curriculum content; verification findings remain deterministic, evidence-based, and subject to human review.
 
 ```text
 Curriculum Documents
@@ -153,15 +153,15 @@ These results are presented as potential issues requiring academic review, not a
 
 ### Topic Overlap and Progression Analysis
 
-Semantic similarity is used to compare topics and course content. The analysis considers topic similarity, depth, context, learning objectives, course level, outcome contribution, and semester position. Findings may be categorized as low overlap, moderate overlap, high overlap, potential redundancy, or progressive reinforcement.
+Topic similarity is computed deterministically from course names, descriptions, syllabi, and active Course Outcomes. The analyzer compares topic profiles, course level, course-code discipline, semester position, and prerequisite reachability. Findings distinguish potential redundancy, legitimate prerequisite progression, unverified progression, and cross-discipline overlap. A legitimate prerequisite path suppresses redundancy findings. Semantic/embedding-based comparison remains a future extension.
 
 ### Curriculum Structure Analysis
 
-The system can analyze semester-wise credits, core and elective distribution, foundational and advanced courses, prerequisite depth, topic coverage, outcome distribution, skill distribution, elective concentration, and course dependencies.
+The system analyzes semester-wise credits, core and elective distribution, course counts, semester sequence integrity, prerequisite depth, topic coverage, and course dependencies. Credit and distribution checks compare against configured institutional targets rather than built-in assumptions.
 
 ### Accreditation and Industry Alignment
 
-Configured reference knowledge bases can support preliminary comparisons against OBE expectations, accreditation guidance, continuous-improvement evidence, and industry competencies such as cloud computing, artificial intelligence, data engineering, cybersecurity, DevOps, and distributed systems. These comparisons are advisory and do not claim official accreditation compliance.
+Configured governed references support preliminary comparisons against OBE expectations, accreditation criteria, institutional credit/distribution targets, and industry competencies such as cloud computing, artificial intelligence, data engineering, cybersecurity, DevOps, and distributed systems. Rules, provenance, version, and severity are stored with each reference. These comparisons are advisory and do not claim official accreditation compliance.
 
 ## System Architecture
 
@@ -194,38 +194,38 @@ Configured reference knowledge bases can support preliminary comparisons against
 
 ## Verification Engine
 
-The engine combines four analysis approaches:
+The engine combines deterministic rule-based, graph, lexical text, and governed-reference analysis. LLM assistance is used by document ingestion and draft generation, not as a verification decision-maker.
 
 ### Rule-Based Analysis
 
 - Invalid semester or course references
 - Duplicate course identifiers
-- Credit inconsistencies
-- Missing mappings
+- Credit inconsistencies and semester-sequence gaps
+- Missing mappings and outcome coverage
 - Invalid prerequisite references
 - Cyclic prerequisite dependencies
+- Institutional and program balance targets
 
 ### Graph-Based Analysis
 
-- Prerequisite chains and course dependencies
+- Prerequisite chains, roots, leaves, and longest paths
+- Transitive redundant prerequisite edges
 - PO coverage and outcome propagation
-- Topic relationships
 - Curriculum structure and progression
 
-### NLP and Semantic Analysis
+### Lexical Topic Analysis
 
-- Topic extraction
+- Topic profile extraction
 - Course-content comparison
-- Outcome-content alignment
-- Skill extraction
-- Topic similarity and overlap detection
+- Deterministic topic similarity and overlap detection
+- Redundancy versus progression classification
 
-### LLM-Assisted Reasoning
+### Governed Reference Analysis
 
-- Semantic interpretation
-- Evidence-based explanations
-- Curriculum-level reasoning
-- Human-readable recommendations
+- OBE outcome and mapping coverage targets
+- Accreditation criterion requirements
+- Industry skill keyword evidence
+- Institutional credit, load, and distribution targets
 
 ## Verification Report
 
@@ -337,6 +337,36 @@ npm run dev
 
 The frontend runs at `http://localhost:3000` and signs in against the FastAPI
 API.
+
+### Optional Neo4j knowledge graph
+
+The **Curricula → Knowledge graph** tab reads a version-scoped projection from
+Neo4j. Relational curriculum features work without Neo4j; the graph tab shows
+setup guidance and the graph API returns `503 graph_unavailable` until a
+connection is configured.
+
+With Docker installed, start a development instance:
+
+```text
+docker compose -f scripts/neo4j-compose.yml up -d
+```
+
+Then add the connection settings to `backend/.env` and restart the API:
+
+```text
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USERNAME=neo4j
+NEO4J_PASSWORD=curriculum-dev-password
+NEO4J_DATABASE=neo4j
+```
+
+Open the curriculum version and use **Rebuild projection** in the Knowledge
+graph tab. Keep projections current while the API is running:
+
+```text
+cd backend
+uv run python -m app.workers.graph_projection
+```
 
 ### Development servers (Windows)
 
@@ -488,27 +518,30 @@ curriculum-intelligence-framework/
   (`docs/lld/prerequisite-management.md`)
 - [x] FR-12 Prerequisite verification engine with runs, findings, and audit trail
   (`docs/lld/prerequisite-verification.md`)
-- [x] Next.js frontend shell with login and authenticated dashboard
+- [x] FR-13 document upload, extraction, LLM analysis, retry, and draft workflow;
+  the draft studio also accepts a topic brief with optional reference documents,
+  saves the generated draft automatically as curriculum version 1.0 in DRAFT
+  status, and lists all saved drafts
+  (`docs/lld/document-processing.md`, `docs/lld/curriculum-management.md`)
+- [x] FR-14 curriculum verification: prerequisite chains and sequencing, semester/credit
+  distribution, topic overlap versus progression, outcome coverage, governed
+  OBE/accreditation/industry/institutional comparison, stale-run detection, finding
+  review, reporting, and an interactive severity-aware verification map
+  (`docs/lld/curriculum-verification.md`)
+- [x] Neo4j graph projection, transactional outbox worker, and frontend knowledge graph explorer
+  (`docs/lld/knowledge-graph.md`)
+- [x] Next.js authenticated workspace covering curriculum, outcomes, verification, documents,
+  administration, comparison, and accessible graph exploration
 
 ### In Progress
 
-- [ ] Detailed requirements analysis
-- [ ] Neo4j graph schema
-- [ ] Document ingestion pipeline
-- [ ] NLP/LLM extraction pipeline
+- [ ] Evaluation datasets and extraction/analysis quality measures
+- [ ] Semantic/embedding-based topic and skill matching
+- [ ] Browser-level end-to-end tests and domain expert validation
 
 ### Planned
 
-- [ ] Curriculum and course management UI
-- [ ] Program outcome and CO-PO mapping UI
-- [ ] Verification findings review workflow
-- [ ] Knowledge graph implementation
-- [ ] Verification engine
-- [ ] Topic overlap analysis
-- [ ] Accreditation and industry relevance analysis
-- [ ] Curriculum visualization
-- [ ] Gap report generation
-- [ ] System evaluation and deployment
+- [ ] Production deployment, containerization, and operational documentation
 
 ## Team and License
 
