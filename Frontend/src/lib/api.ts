@@ -37,6 +37,8 @@ export type Curriculum = {
   description: string | null;
   duration_years: number;
   status: string;
+  created_at: string;
+  updated_at: string;
   latest_version: { id: string; version_label: string; status: string } | null;
 };
 
@@ -189,13 +191,190 @@ export type Prerequisite = {
   review_comments: string | null;
 };
 
+export type KnowledgeGraphNode = {
+  labels: string[];
+  properties: Record<string, unknown>;
+};
+
+export type KnowledgeGraphRelationship = {
+  type: string;
+  properties: Record<string, unknown>;
+  source_id: string;
+  target_id: string;
+};
+
+export type KnowledgeGraph = {
+  curriculum_version_id: string;
+  nodes: KnowledgeGraphNode[];
+  relationships: KnowledgeGraphRelationship[];
+  projection_status: string;
+  is_current: boolean;
+};
+
+export type KnowledgeGraphRebuild = {
+  curriculum_id: string;
+  curriculum_version_id: string;
+  node_count: number;
+  relationship_count: number;
+};
+
+export type VerificationRunSummary = {
+  result?: string;
+  total_findings?: number;
+  findings_by_severity?: Record<string, number>;
+  findings_by_category?: Record<string, number>;
+  analyzers?: string[];
+  prerequisite_graph?: {
+    edge_count: number;
+    root_courses: string[];
+    leaf_courses: string[];
+    isolated_courses: string[];
+    longest_chain: string[];
+    longest_chain_length: number;
+    longest_chain_semesters: number[];
+    transitive_redundant_edges: number;
+  };
+  structure?: {
+    active_course_count: number;
+    semester_count: number;
+    expected_semester_count: number | null;
+    total_credits: number;
+    credit_totals_by_semester: Record<string, number>;
+    credits_by_course_type: Record<string, number>;
+    course_counts_by_semester: Record<string, number>;
+    course_counts_by_course_type: Record<string, number>;
+    average_semester_credits: number;
+    semester_credit_range: { min: number; max: number };
+  };
+  credit_totals_by_semester?: Record<string, number>;
+  total_credits?: number;
+  credits_by_course_type?: Record<string, number>;
+  topic_overlap?: {
+    pairs_evaluated: number;
+    candidates: number;
+    redundancy_candidates: number;
+    progression_candidates: number;
+    unverified_progression_candidates: number;
+    cross_discipline_candidates: number;
+    top_overlaps: {
+      course_a: string;
+      course_b: string;
+      semester_a: number;
+      semester_b: number;
+      score: number;
+      title_similarity: number;
+      shared_terms: string[];
+      classification: string;
+    }[];
+  };
+  reference_comparison?: {
+    status: string;
+    checked: boolean;
+    count: number;
+    references: {
+      id: string;
+      type: string;
+      code: string;
+      title: string;
+      source: string;
+      version_label: string;
+      severity: string;
+      category: string;
+    }[];
+    findings_by_reference: Record<string, number>;
+    metrics: Record<string, unknown>;
+    invalid_references: { id: string; code: string; reason: string }[];
+    evidence_basis: {
+      active_course_count: number;
+      total_credits: number;
+      credits_by_course_type: Record<string, number>;
+    };
+  };
+  input_fingerprint?: string;
+  input_fingerprint_version?: number;
+};
+
 export type VerificationRun = {
   id: string;
   curriculum_version_id: string;
+  requested_by?: string;
   status: string;
   requested_at: string;
+  started_at?: string | null;
   completed_at: string | null;
-  summary: { result?: string; total_findings?: number; findings_by_severity?: Record<string, number> } | null;
+  error_message?: string | null;
+  summary: VerificationRunSummary | null;
+  input_fingerprint: string | null;
+  is_stale: boolean;
+};
+
+export type VerificationReferenceType = "OBE" | "ACCREDITATION" | "INDUSTRY" | "INSTITUTIONAL";
+export type VerificationReferenceStatus = "ACTIVE" | "INACTIVE";
+
+export type VerificationNumericRange = {
+  min?: number | null;
+  max?: number | null;
+};
+
+export type VerificationReferenceRules = {
+  total_credits?: VerificationNumericRange;
+  semester_credits?: VerificationNumericRange;
+  semester_count?: VerificationNumericRange;
+  course_type_credits?: Record<string, VerificationNumericRange>;
+  course_type_share?: Record<string, VerificationNumericRange>;
+  required_po_codes?: string[];
+  required_peo_codes?: string[];
+  min_po_coverage_ratio?: number | null;
+  min_approved_mapping_ratio?: number | null;
+  criterion?: string;
+  required_course_types?: string[];
+  skills?: {
+    code: string;
+    label: string;
+    keywords: string[];
+    required: boolean;
+    min_courses: number;
+  }[];
+  min_required_skill_coverage_ratio?: number | null;
+};
+
+export type VerificationReference = {
+  id: string;
+  program_id: string | null;
+  reference_type: VerificationReferenceType;
+  code: string;
+  title: string;
+  source: string;
+  version_label: string;
+  effective_date: string | null;
+  severity: string;
+  status: VerificationReferenceStatus;
+  rules: VerificationReferenceRules;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type VerificationReferenceCreate = {
+  program_id?: string | null;
+  reference_type: VerificationReferenceType;
+  code: string;
+  title: string;
+  source: string;
+  version_label?: string;
+  effective_date?: string | null;
+  severity?: string;
+  rules: VerificationReferenceRules;
+};
+
+export type VerificationReferenceUpdate = {
+  title?: string;
+  source?: string;
+  version_label?: string;
+  effective_date?: string | null;
+  severity?: string;
+  status?: VerificationReferenceStatus;
+  rules?: VerificationReferenceRules;
 };
 
 export type VerificationFinding = {
@@ -529,6 +708,13 @@ export const api = {
   removePrerequisite(curriculumId: string, versionId: string, prerequisiteId: string): Promise<void> {
     return request(`/api/v1/curricula/${curriculumId}/versions/${versionId}/prerequisites/${prerequisiteId}`, { method: "DELETE" });
   },
+  getKnowledgeGraph(curriculumId: string, versionId: string, limit = 1000): Promise<KnowledgeGraph> {
+    const params = new URLSearchParams({ limit: String(limit) });
+    return request<KnowledgeGraph>(`/api/v1/curricula/${curriculumId}/versions/${versionId}/graph?${params}`);
+  },
+  rebuildKnowledgeGraph(curriculumId: string, versionId: string): Promise<KnowledgeGraphRebuild> {
+    return request<KnowledgeGraphRebuild>(`/api/v1/curricula/${curriculumId}/versions/${versionId}/graph/rebuild`, { method: "POST" });
+  },
   listVerificationRuns(curriculumId: string, versionId: string): Promise<VerificationRun[]> {
     return request<VerificationRun[]>(
       `/api/v1/curricula/${curriculumId}/versions/${versionId}/verification-runs`,
@@ -564,6 +750,35 @@ export const api = {
       body: JSON.stringify({ review_status: reviewStatus, review_comments: reviewComments || null }),
     });
   },
+  listVerificationReferences(filters: {
+    program_id?: string;
+    reference_type?: VerificationReferenceType;
+    include_inactive?: boolean;
+  } = {}): Promise<VerificationReference[]> {
+    const params = new URLSearchParams();
+    if (filters.program_id) params.set("program_id", filters.program_id);
+    if (filters.reference_type) params.set("reference_type", filters.reference_type);
+    if (filters.include_inactive) params.set("include_inactive", "true");
+    const query = params.toString();
+    return request<VerificationReference[]>(
+      `/api/v1/verification-references${query ? `?${query}` : ""}`,
+    );
+  },
+  createVerificationReference(payload: VerificationReferenceCreate): Promise<VerificationReference> {
+    return request<VerificationReference>("/api/v1/verification-references", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  updateVerificationReference(
+    referenceId: string,
+    payload: VerificationReferenceUpdate,
+  ): Promise<VerificationReference> {
+    return request<VerificationReference>(`/api/v1/verification-references/${referenceId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
   uploadDocument(file: File): Promise<Document> {
     const form = new FormData();
     form.append("file", file);
@@ -583,8 +798,10 @@ export const api = {
       method: "POST",
     });
   },
-  generateCurriculumDraft(files: File[]): Promise<CurriculumDraft> {
+  generateCurriculumDraft(files: File[], topic?: string): Promise<CurriculumDraft> {
     const form = new FormData();
+    const normalizedTopic = topic?.trim();
+    if (normalizedTopic) form.append("topic", normalizedTopic);
     for (const file of files) {
       form.append("files", file);
     }
